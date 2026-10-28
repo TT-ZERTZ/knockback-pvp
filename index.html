@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knockback PVP</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%230f172a' stroke='%2322d3ee' stroke-width='4'/%3E%3Cpath d='M14 40h16v8l18-16-18-16v8H14z' fill='%23fb7185'/%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r136/three.min.js"></script>
+<style>
+body{margin:0;overflow:hidden;user-select:none;font-family:system-ui,-apple-system,sans-serif;background:#0b1224}
+#crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;display:flex;align-items:center;justify-content:center}
+.glass{background:rgba(15,23,42,.72);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12)}
+input[type=range]{accent-color:#22d3ee}
+</style>
+</head>
+<body class="w-screen h-screen relative">
+<canvas id="gameCanvas" class="w-full h-full block"></canvas>
+<div id="crosshair" class="hidden"></div>
+
+<div id="hud" class="absolute top-0 left-0 w-full p-4 pointer-events-none flex justify-between items-start hidden">
+  <div class="glass p-4 rounded-2xl min-w-[190px]">
+    <div class="text-xs text-slate-400 font-semibold" id="hudP1Name">You</div>
+    <div class="text-3xl font-black text-cyan-300" id="hudP1Percent">0%</div>
+    <div class="text-xs text-slate-300 mt-1">KOs: <span id="hudP1Score" class="font-bold text-white">0</span></div>
+    <div class="w-full bg-slate-700/70 h-1.5 rounded-full overflow-hidden mt-2"><div id="hudP1DashBar" class="bg-cyan-300 h-full w-full"></div></div>
+  </div>
+  <div class="glass px-6 py-2 rounded-2xl text-center">
+    <div class="text-xs text-slate-400">Room</div>
+    <div class="text-xl font-mono font-bold text-amber-300" id="hudRoomCode">SOLO</div>
+    <div id="hudRoleTag" class="text-[11px] text-emerald-300">Press Esc for settings</div>
+  </div>
+  <div class="glass p-4 rounded-2xl min-w-[190px] text-right">
+    <div class="text-xs text-slate-400 font-semibold" id="hudP2Name">Opponent</div>
+    <div class="text-3xl font-black text-rose-300" id="hudP2Percent">0%</div>
+    <div class="text-xs text-slate-300 mt-1">KOs: <span id="hudP2Score" class="font-bold text-white">0</span></div>
+    <div class="text-[11px] text-emerald-300" id="p2StatusText">Connected</div>
+  </div>
+</div>
+
+<div id="weaponHud" class="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-none flex gap-3 hidden">
+  <div id="wpn1" class="glass px-4 py-2 rounded-xl text-center"><div class="text-xs text-slate-400">1</div><div class="text-sm font-bold text-white">Rifle</div></div>
+  <div id="wpn2" class="glass px-4 py-2 rounded-xl text-center"><div class="text-xs text-slate-400">2</div><div class="text-sm font-bold text-white">Shotgun</div></div>
+  <div id="wpn3" class="glass px-4 py-2 rounded-xl text-center"><div class="text-xs text-slate-400">3</div><div class="text-sm font-bold text-white">Rocket</div></div>
+</div>
+
+<!-- Settings panel: moved between the menu and the pause screen -->
+<div id="settingsControls" class="hidden flex flex-col gap-4 text-left max-h-[280px] overflow-y-auto pr-2">
+  <div>
+    <div class="flex justify-between text-xs font-bold text-slate-300 mb-1"><label for="sensSlider">Mouse sensitivity</label><span id="sensVal" class="text-cyan-300">2.2</span></div>
+    <input id="sensSlider" type="range" min="0.5" max="10" step="0.1" value="2.2" class="w-full cursor-pointer">
+  </div>
+  <div>
+    <div class="flex justify-between text-xs font-bold text-slate-300 mb-1"><label for="fovSlider">Field of view</label><span id="fovVal" class="text-cyan-300">75°</span></div>
+    <input id="fovSlider" type="range" min="60" max="110" step="1" value="75" class="w-full cursor-pointer">
+  </div>
+  <div>
+    <label for="crosshairStyle" class="block text-xs font-bold text-slate-300 mb-1">Crosshair style</label>
+    <select id="crosshairStyle" class="w-full bg-slate-900 border border-slate-700 text-xs font-semibold rounded-lg p-2.5 text-slate-200">
+      <option value="cross">Classic cross</option><option value="dot">Dot</option><option value="circle">Circle</option><option value="box">Box</option>
+    </select>
+  </div>
+  <div class="flex gap-4">
+    <div class="flex-1"><label for="crosshairColor" class="block text-xs font-bold text-slate-300 mb-1">Color</label>
+      <input id="crosshairColor" type="color" value="#ffffff" class="w-full h-9 bg-slate-900 border border-slate-700 rounded-lg p-1 cursor-pointer"></div>
+    <div class="flex-1"><div class="flex justify-between text-xs font-bold text-slate-300 mb-1"><label for="crosshairSize">Size</label><span id="sizeVal" class="text-cyan-300">12px</span></div>
+      <input id="crosshairSize" type="range" min="6" max="30" step="1" value="12" class="w-full cursor-pointer"></div>
+  </div>
+  <div>
+    <div class="flex justify-between text-xs font-bold text-slate-300 mb-1"><label for="botSlider">Bot difficulty (solo)</label><span id="botVal" class="text-cyan-300">Normal</span></div>
+    <input id="botSlider" type="range" min="1" max="3" step="1" value="2" class="w-full cursor-pointer">
+  </div>
+</div>
+
+<div id="menuOverlay" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50">
+  <div class="glass p-8 rounded-3xl max-w-md w-full shadow-2xl text-slate-100 text-center">
+    <svg viewBox="0 0 64 64" width="84" height="84" class="mx-auto mb-1"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#67e8f9"/><stop offset="1" stop-color="#fb7185"/></linearGradient></defs><circle cx="32" cy="32" r="29" fill="#0f172a" stroke="url(#lg)" stroke-width="4"/><circle cx="17" cy="32" r="3" fill="#67e8f9"/><path d="M23 40h14v9l19-17-19-17v9H23z" fill="url(#lg)"/></svg>
+    <h1 class="text-4xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-rose-400 mb-1">KNOCKBACK PVP</h1>
+    <p class="text-slate-400 text-sm mb-5">Launch your opponent off the map.</p>
+    <div class="flex gap-2 mb-4">
+      <input id="nameInput" maxlength="16" placeholder="Your name" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-100 focus:outline-none focus:border-cyan-400">
+      <select id="mapSelect" class="bg-slate-900 border border-slate-700 rounded-xl px-3 text-xs font-semibold text-slate-200"><option value="0">Neon Island</option><option value="1">Skyline Rooftop</option><option value="2">Frozen Ring</option></select>
+    </div>
+    <div class="flex bg-slate-900/70 p-1 rounded-xl mb-5">
+      <button id="tabSolo" class="flex-1 py-2 text-xs font-bold rounded-lg">Solo</button>
+      <button id="tabMulti" class="flex-1 py-2 text-xs font-bold rounded-lg">Private</button>
+      <button id="tabFind" class="flex-1 py-2 text-xs font-bold rounded-lg">Find match</button>
+      <button id="tabSettings" class="flex-1 py-2 text-xs font-bold rounded-lg">Settings</button>
+    </div>
+    <div id="multiControls" class="hidden flex flex-col gap-3 mb-5">
+      <button id="btnHost" class="bg-gradient-to-r from-emerald-400 to-teal-500 text-slate-950 font-bold py-3 rounded-xl">Host match</button>
+      <div class="text-xs text-slate-500">or join a room</div>
+      <div class="flex gap-2">
+        <input id="inputRoomCode" maxlength="4" placeholder="Code" class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 font-mono font-bold text-center tracking-widest text-amber-300 uppercase flex-1 focus:outline-none focus:border-cyan-400">
+        <button id="btnJoin" class="bg-cyan-400 text-slate-950 font-bold px-6 py-3 rounded-xl">Join</button>
+      </div>
+      <div id="netStatus" class="text-xs font-semibold text-slate-400 min-h-[1rem]"></div>
+    </div>
+    <div id="findControls" class="hidden flex flex-col gap-3 mb-5">
+      <button id="btnFind" class="bg-gradient-to-r from-amber-300 to-rose-400 text-slate-950 font-bold py-3 rounded-xl">Search for a game</button>
+      <button id="btnCancelFind" class="hidden bg-slate-800 text-slate-200 font-bold py-3 rounded-xl">Cancel search</button>
+      <div id="findStatus" class="text-xs font-semibold text-slate-400 min-h-[1rem]"></div>
+    </div>
+    <div id="menuSettingsSlot" class="mb-5"></div>
+    <button id="btnStart" class="w-full bg-gradient-to-r from-cyan-300 to-blue-500 text-slate-950 font-black py-4 rounded-xl text-lg shadow-xl shadow-cyan-500/20">Enter arena</button>
+    <div class="mt-5 pt-4 border-t border-slate-800 text-left text-xs text-slate-400 grid grid-cols-2 gap-x-2 gap-y-1">
+      <div><span class="text-cyan-300">WASD</span> move</div><div><span class="text-cyan-300">Space</span> jump / double jump</div>
+      <div><span class="text-cyan-300">Shift</span> dash</div><div><span class="text-cyan-300">Click</span> attack (hold)</div>
+      <div><span class="text-cyan-300">1 / 2 / 3</span> weapons</div><div><span class="text-cyan-300">Esc</span> settings</div>
+    </div>
+  </div>
+</div>
+
+<div id="pauseOverlay" class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-40 hidden">
+  <div class="glass p-6 rounded-3xl max-w-sm w-full text-slate-100">
+    <h2 class="text-2xl font-bold text-center mb-4">Settings</h2>
+    <div id="pauseSettingsSlot" class="mb-4"></div>
+    <button id="btnResume" class="w-full bg-cyan-400 text-slate-950 font-bold py-3 rounded-xl">Resume</button>
+    <button id="btnLeave" class="w-full mt-2 bg-slate-800 hover:bg-rose-500 hover:text-white text-slate-200 font-bold py-3 rounded-xl transition">Leave game</button>
+    <p id="pauseHint" class="text-slate-400 text-xs text-center mt-2">Click Resume to get back in.</p>
+  </div>
+</div>
+
+<div id="adminPanel" class="absolute top-4 right-4 w-80 glass rounded-2xl p-4 z-[70] hidden text-slate-100 text-xs">
+  <div class="flex justify-between items-center mb-2"><b class="text-sm">🔨 Admin panel</b><span class="text-slate-400">\ to close</span></div>
+  <div class="flex gap-2 mb-2">
+    <select id="banTime" class="bg-slate-900 border border-slate-700 rounded-lg px-2"><option value="10">Ban 10 min</option><option value="60">Ban 1 hour</option><option value="1440">Ban 1 day</option><option value="0">Ban forever</option></select>
+    <button id="btnFling" class="flex-1 bg-amber-400 text-slate-950 font-bold rounded-lg py-1.5">Fling all</button>
+  </div>
+  <div id="adminList" class="max-h-64 overflow-y-auto flex flex-col gap-1 mb-2"></div>
+  <button id="btnUnban" class="w-full bg-slate-800 hover:bg-emerald-500 rounded-lg py-1.5 font-semibold">Clear all bans</button>
+</div>
+<div id="scoreboard" class="absolute inset-0 hidden pointer-events-none flex items-center justify-center z-30"><div class="glass rounded-2xl p-4 w-80"><div class="text-xs text-slate-400 mb-2">Leaderboard</div><div id="sbRows"></div></div></div>
+
+<script>
+// ---------- STATE ----------
+let conn = null;
+let isGameActive = false, isPointerLocked = false, lastLockExit = 0, botMode = true, mouseDown = false, noLock = false;
+// true when the mouse is locked, or when locking failed (file://, iframes) and the pause screen is closed
+const inputActive = () => isPointerLocked || (noLock && pauseOverlay.classList.contains('hidden'));
+const userSettings = { sensitivity: 0.0022, fov: 75, crosshairStyle: 'cross', crosshairColor: '#ffffff', crosshairSize: 12, botLevel: 2 };
+
+const mkBody = (z, extra) => Object.assign({ x: 0, y: 3, z, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, percent: 0, score: 0, canDoubleJump: true, isGrounded: false, mesh: null }, extra);
+const localPlayer = mkBody(12, { dashCooldown: 0, weapon: 1 });
+const remotePlayer = mkBody(-12, { connected: false });
+const keys = { w: false, a: false, s: false, d: false };
+
+let scene, camera, renderer, gun, gunKick = 0, time = 0;
+const bouncePads = [], floaters = [], particles = [];
+const WEAPONS = {
+  1: { fireRate: 150, damage: 7, knockback: 11, range: 150, spread: 0.02, color: 0x67e8f9 },
+  2: { fireRate: 650, damage: 4, knockback: 7, range: 100, spread: 0.12, count: 6, color: 0xfb7185 },
+  3: { fireRate: 900, damage: 22, knockback: 32, range: 200, spread: 0, color: 0xfbbf24 }
+};
+let lastShot = 0;
+const $ = id => document.getElementById(id);
+const canvas = $('gameCanvas'), menuOverlay = $('menuOverlay'), pauseOverlay = $('pauseOverlay'), crosshair = $('crosshair');
+const settingsControls = $('settingsControls');
+const tabs = { solo: $('tabSolo'), multi: $('tabMulti'), find: $('tabFind'), settings: $('tabSettings') };
+
+// ---------- SCENE ----------
+function gradientTexture(stops) {
+  const c = document.createElement('canvas'); c.width = 2; c.height = 256;
+  const g = c.getContext('2d'), grad = g.createLinearGradient(0, 0, 0, 256);
+  stops.forEach(([p, col]) => grad.addColorStop(p, col));
+  g.fillStyle = grad; g.fillRect(0, 0, 2, 256);
+  return new THREE.CanvasTexture(c);
+}
+function gridTexture(m) {
+  const c = document.createElement('canvas'); c.width = c.height = 512;
+  const g = c.getContext('2d');
+  g.fillStyle = m.top; g.fillRect(0, 0, 512, 512);
+  g.strokeStyle = m.acc; g.globalAlpha = 0.2; g.lineWidth = 2;
+  for (let i = 0; i <= 512; i += 32) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 512); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(512, i); g.stroke(); }
+  g.globalAlpha = 0.6; g.lineWidth = 4; g.beginPath(); g.arc(256, 256, 70, 0, 7); g.stroke();
+  return new THREE.CanvasTexture(c);
+}
+function windowTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'); g.fillStyle = '#0d1524'; g.fillRect(0, 0, 64, 64);
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { g.fillStyle = Math.random() < 0.55 ? '#fde68a' : '#1b2538'; g.fillRect(x * 16 + 3, y * 16 + 3, 10, 10); }
+  const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+}
+
+function initThree() {
+  scene = new THREE.Scene();
+  scene.background = gradientTexture([[0, '#0b1230'], [0.55, '#3b2a6b'], [1, '#e0709a']]);
+  scene.fog = new THREE.Fog(0x4a3478, 60, 230);
+
+  camera = new THREE.PerspectiveCamera(userSettings.fov, innerWidth / innerHeight, 0.1, 1000);
+  scene.add(camera);
+
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  scene.add(new THREE.HemisphereLight(0xb4a8ff, 0x2a1b4d, 0.75));
+  const sun = new THREE.DirectionalLight(0xffe3c4, 1.1);
+  sun.position.set(25, 40, 15); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { near: 1, far: 100, left: -30, right: 30, top: 30, bottom: -30 });
+  scene.add(sun);
+
+  // stars
+  const sp = [];
+  for (let i = 0; i < 700; i++) {
+    const v = new THREE.Vector3().randomDirection ? new THREE.Vector3().randomDirection() : new THREE.Vector3(Math.random() - .5, Math.random() - .5, Math.random() - .5).normalize();
+    if (v.y < -0.1) continue;
+    sp.push(v.x * 400, v.y * 400, v.z * 400);
+  }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+  scene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.3, fog: false })));
+
+  buildArena(0);
+  localPlayer.mesh = buildCharacter(0x22d3ee); localPlayer.mesh.visible = false;
+  remotePlayer.mesh = buildCharacter(0xfb4f72);
+  remoteTag = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false }));
+  remoteTag.scale.set(3, 0.75, 1); remoteTag.position.y = 1.5; remoteTag.raycast = () => {}; // bullets pass through the nametag
+  remotePlayer.mesh.add(remoteTag);
+  buildViewmodel();
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+}
+
+const MAPS = [
+  { name: 'Neon Island', shape: 'round', R: 18, sky: [[0, '#0b1230'], [0.55, '#3b2a6b'], [1, '#e0709a']], fog: 0x4a3478, top: '#1c2b4a', acc: '#67e8f9', rock: 0x3b3558, scenery: 'rocks' },
+  { name: 'Skyline Rooftop', shape: 'square', R: 16, sky: [[0, '#06101f'], [0.6, '#1c3b5a'], [1, '#f5a15a']], fog: 0x2b4a68, top: '#2b3445', acc: '#fbbf24', rock: 0x2a3140, scenery: 'city' },
+  { name: 'Frozen Ring', shape: 'round', R: 15, sky: [[0, '#071a2e'], [0.6, '#2b6a8f'], [1, '#d6f1ff']], fog: 0x6aa6c4, top: '#bcd9e8', acc: '#38bdf8', rock: 0x7aa3b8, scenery: 'rocks' }
+];
+let arena = null, curMap = -1;
+const onPlat = (x, z) => { const m = MAPS[curMap]; return m.shape === 'round' ? Math.hypot(x, z) <= m.R : Math.max(Math.abs(x), Math.abs(z)) <= m.R; };
+const platNorm = (x, z) => { const m = MAPS[curMap]; return (m.shape === 'round' ? Math.hypot(x, z) : Math.max(Math.abs(x), Math.abs(z))) / m.R; };
+
+function buildArena(i) {
+  if (i === curMap) return;
+  curMap = i; const m = MAPS[i], R = m.R, round = m.shape === 'round';
+  if (arena) scene.remove(arena);
+  arena = new THREE.Group(); scene.add(arena);
+  bouncePads.length = 0; floaters.length = 0;
+  scene.background = gradientTexture(m.sky); scene.fog.color.setHex(m.fog);
+  const acc = new THREE.Color(m.acc);
+  const top = new THREE.MeshStandardMaterial({ map: gridTexture(m), roughness: 0.5, metalness: 0.2 });
+  const rock = new THREE.MeshStandardMaterial({ color: m.rock, roughness: 0.95 });
+  const glow = new THREE.MeshStandardMaterial({ color: acc, emissive: acc, emissiveIntensity: 1.3 });
+
+  const slab = round ? new THREE.Mesh(new THREE.CylinderGeometry(R, R, 0.8, 96), [rock, top, rock])
+                     : new THREE.Mesh(new THREE.BoxGeometry(2 * R, 0.8, 2 * R), [rock, rock, top, rock, rock, rock]);
+  slab.position.y = -0.4; slab.receiveShadow = true; arena.add(slab);
+
+  let under;
+  if (round) {
+    const pts = [[R, 0], [R * .95, -1.6], [R * .78, -4], [R * .58, -7], [R * .36, -10.5], [R * .17, -13.5], [0.01, -16]]
+      .map(([r, y]) => new THREE.Vector2(r + (Math.random() - .5) * 0.6, y - 0.8));
+    under = new THREE.Mesh(new THREE.LatheGeometry(pts, 48), rock);
+  } else {
+    under = new THREE.Mesh(new THREE.CylinderGeometry(R * 1.414, 0.1, 15, 4), rock);
+    under.rotation.y = Math.PI / 4; under.position.y = -8.2;
+  }
+  under.castShadow = true; arena.add(under);
+
+  if (round) { const rim = new THREE.Mesh(new THREE.TorusGeometry(R, 0.16, 16, 128), glow); rim.rotation.x = Math.PI / 2; rim.position.y = 0.02; arena.add(rim); }
+  else [[0, R, 2 * R + .3, .3], [0, -R, 2 * R + .3, .3], [R, 0, .3, 2 * R + .3], [-R, 0, .3, 2 * R + .3]].forEach(([x, z, w, d]) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, 0.15, d), glow); b.position.set(x, 0.05, z); arena.add(b); });
+
+  [[.55, 0], [-.55, 0], [0, .55], [0, -.55]].forEach(([fx, fz]) => {
+    const g = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.3, 0.4, 32), new THREE.MeshStandardMaterial({ color: 0x0f766e, roughness: 0.4 }));
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.12, 12, 48), new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x34d399, emissiveIntensity: 1.5 }));
+    ring.rotation.x = Math.PI / 2; ring.position.y = 0.25;
+    g.add(base, ring); g.position.set(fx * R, 0.2, fz * R); g.userData.glow = ring;
+    arena.add(g); bouncePads.push(g);
+  });
+
+  if (m.scenery === 'city') {
+    const wt = windowTexture();
+    for (let n = 0; n < 18; n++) {
+      const a = n / 18 * Math.PI * 2 + Math.random() * 0.3, r = 36 + Math.random() * 32, w = 6 + Math.random() * 9, h = 45 + Math.random() * 60, topY = -12 + Math.random() * 38;
+      const t = wt.clone(); t.needsUpdate = true; t.repeat.set(Math.ceil(w / 4), Math.ceil(h / 5));
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), new THREE.MeshStandardMaterial({ color: 0x1a2233, map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.85, roughness: 0.8 }));
+      b.position.set(Math.cos(a) * r, topY - h / 2, Math.sin(a) * r); arena.add(b);
+      const ant = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3b3b }));
+      ant.position.set(b.position.x, topY + 0.6, b.position.z); arena.add(ant);
+    }
+  } else {
+    for (let n = 0; n < 9; n++) {
+      const a = (n / 9) * Math.PI * 2 + Math.random(), r = 32 + Math.random() * 40, s = 1 + Math.random() * 3;
+      const f = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 1), rock);
+      f.position.set(Math.cos(a) * r, -6 + Math.random() * 22, Math.sin(a) * r);
+      f.userData = { baseY: f.position.y, ph: Math.random() * 6, sp: 0.2 + Math.random() * 0.3 };
+      arena.add(f); floaters.push(f);
+    }
+  }
+}
+
+// smooth capsule-bodied character with visor and gun
+function capsule(r, len, mat) {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 28), mat));
+  [1, -1].forEach(s => { const c = new THREE.Mesh(new THREE.SphereGeometry(r, 28, 18), mat); c.position.y = s * len / 2; g.add(c); });
+  return g;
+}
+function buildCharacter(color) {
+  const root = new THREE.Group();
+  const body = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.1 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x0b1020, roughness: 0.2, metalness: 0.6 });
+  const model = new THREE.Group();
+  model.add(capsule(0.42, 0.7, body));
+  const visor = new THREE.Mesh(new THREE.SphereGeometry(0.3, 24, 16), dark);
+  visor.scale.set(1.1, 0.55, 0.7); visor.position.set(0, 0.5, -0.28); model.add(visor);
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.7, 12), dark);
+  arm.rotation.x = Math.PI / 2; arm.position.set(0.42, 0.05, -0.4); model.add(arm);
+  model.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  root.add(model); scene.add(root);
+  return root;
+}
+
+function buildGunModel(i) {
+  const g = new THREE.Group();
+  const M = (c, mt = 0.7, r = 0.3) => new THREE.MeshStandardMaterial({ color: c, metalness: mt, roughness: r });
+  const body = M(0x1e293b), wood = M(0x7c2d12, 0.1, 0.7), col = WEAPONS[i].color;
+  const accent = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1 });
+  const cyl = (rt, rb, l, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, l, 20), mat); m.rotation.x = Math.PI / 2; m.position.set(x, y, z); g.add(m); };
+  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); };
+  if (i === 1) { // rifle
+    cyl(.035, .035, .7, body, 0, .02, -.35); cyl(.05, .05, .32, M(0x334155), 0, 0, -.1); box(.07, .12, .34, body, 0, -.02, .18);
+    box(.05, .14, .07, body, 0, -.12, .12); box(.05, .1, .08, M(0x0f172a), 0, -.1, -.12); box(.03, .05, .2, accent, 0, .09, -.05); cyl(.045, .045, .06, accent, 0, .02, -.72);
+  } else if (i === 2) { // shotgun
+    cyl(.035, .035, .75, body, -.04, .03, -.38); cyl(.035, .035, .75, body, .04, .03, -.38); cyl(.055, .055, .28, wood, 0, -.02, -.3);
+    box(.08, .14, .4, wood, 0, -.03, .2); box(.06, .16, .07, body, 0, -.13, .08); cyl(.05, .05, .04, accent, 0, .03, -.77);
+  } else { // rocket launcher
+    cyl(.1, .1, .9, M(0x3f3f46), 0, .02, -.25); cyl(.14, .12, .16, body, 0, .02, -.75); cyl(.09, .09, .1, accent, 0, .02, -.84);
+    box(.06, .16, .08, body, 0, -.12, 0); box(.04, .1, .12, body, 0, .14, -.2); cyl(.07, .1, .14, body, 0, .02, .22);
+  }
+  return g;
+}
+function setGunModel(i) {
+  if (gun.userData.m) gun.remove(gun.userData.m);
+  gun.userData.m = buildGunModel(i); gun.add(gun.userData.m);
+}
+function buildViewmodel() {
+  gun = new THREE.Group(); gun.position.set(0.32, -0.28, -0.5); gun.rotation.y = 0.06; gun.scale.setScalar(0.85);
+  camera.add(gun); setGunModel(1);
+}
+
+// ---------- PHYSICS ----------
+function stepBody(b, dt, mx, mz) {
+  const ground = b.isGrounded;
+  b.vx += mx * (ground ? 35 : 12) * dt; b.vz += mz * (ground ? 35 : 12) * dt;
+  const drag = Math.max(0, 1 - (ground ? 8 : 0.8) * dt);
+  b.vx *= drag; b.vz *= drag; b.vy -= 28 * dt;
+  b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+  if (b.y <= 0.9 && b.vy <= 0 && onPlat(b.x, b.z)) { b.y = 0.9; b.vy = 0; b.isGrounded = true; b.canDoubleJump = true; }
+  else b.isGrounded = false;
+  bouncePads.forEach(p => {
+    if (Math.hypot(b.x - p.position.x, b.z - p.position.z) < 2.2 && Math.abs(b.y - 0.9) < 0.8) { b.vy = 26; b.isGrounded = false; }
+  });
+}
+function applyKnockback(b, damage, kb, d) {
+  b.percent += damage;
+  const imp = kb * (1 + b.percent / 100);
+  b.vx += d.x * imp; b.vy += Math.max(d.y * imp, 7); b.vz += d.z * imp; b.isGrounded = false;
+}
+function respawn(b, z) { Object.assign(b, { x: 0, y: 6, z, vx: 0, vy: 0, vz: 0, percent: 0 }); }
+
+function updateLocal(dt) {
+  if (localPlayer.dashCooldown > 0) {
+    localPlayer.dashCooldown = Math.max(0, localPlayer.dashCooldown - dt);
+    $('hudP1DashBar').style.width = ((1.5 - localPlayer.dashCooldown) / 1.5) * 100 + '%';
+  }
+  const f = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayer.yaw);
+  const s = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), localPlayer.yaw);
+  let mx = 0, mz = 0;
+  if (keys.w) { mx += f.x; mz += f.z; } if (keys.s) { mx -= f.x; mz -= f.z; }
+  if (keys.a) { mx -= s.x; mz -= s.z; } if (keys.d) { mx += s.x; mz += s.z; }
+  const l = Math.hypot(mx, mz) || 1; mx = mx / l * (mx || mz ? 1 : 0); mz = mz / l * (mx || mz ? 1 : 0);
+  stepBody(localPlayer, dt, mx, mz);
+  if (mouseDown) fireWeapon();
+
+  if (localPlayer.y < -25) {
+    respawn(localPlayer, 12); remotePlayer.score++;
+    $('hudP2Score').textContent = remotePlayer.score;
+    if (conn && conn.open) conn.send({ type: 'KO' });
+  }
+  if (conn && conn.open) conn.send({ type: 'SYNC', x: localPlayer.x, y: localPlayer.y, z: localPlayer.z, yaw: localPlayer.yaw, pitch: localPlayer.pitch, percent: localPlayer.percent });
+}
+
+// ---------- BOT ----------
+const bot = { t: 0, fire: 1.5, jump: 2 };
+function updateBot(dt) {
+  const b = remotePlayer, lvl = userSettings.botLevel;
+  bot.t += dt;
+  const dx = localPlayer.x - b.x, dz = localPlayer.z - b.z, d = Math.hypot(dx, dz) || 1, nx = dx / d, nz = dz / d;
+  let mx = 0, mz = 0;
+  if (d > 11) { mx += nx; mz += nz; } else if (d < 6) { mx -= nx; mz -= nz; }
+  const sgn = Math.sin(bot.t * 0.9) > 0 ? 1 : -1;
+  mx += -nz * sgn * 0.8; mz += nx * sgn * 0.8;
+  const r = Math.hypot(b.x, b.z), pn = platNorm(b.x, b.z);
+  if (pn > 0.72 || b.y < 0) { mx -= (b.x / (r || 1)) * 2.5; mz -= (b.z / (r || 1)) * 2.5; }
+  const l = Math.hypot(mx, mz) || 1; mx /= l; mz /= l;
+  b.yaw = Math.atan2(-dx, -dz);
+
+  bot.jump -= dt;
+  if (bot.jump <= 0 && b.isGrounded) { b.vy = 12; b.isGrounded = false; bot.jump = 1.5 + Math.random() * 2.5; }
+  if (b.y < -1 && b.canDoubleJump && pn > 0.8) { b.vy = 11; b.canDoubleJump = false; }
+  stepBody(b, dt, mx, mz);
+
+  bot.fire -= dt;
+  if (bot.fire <= 0 && d < 45) {
+    bot.fire = (1.3 - lvl * 0.25) + Math.random() * 0.5;
+    const aim = new THREE.Vector3(dx, localPlayer.y - b.y, dz).normalize();
+    aim.x += (Math.random() - .5) * 0.08; aim.y += (Math.random() - .5) * 0.08; aim.z += (Math.random() - .5) * 0.08; aim.normalize();
+    const start = new THREE.Vector3(b.x, b.y + 0.5, b.z);
+    tracer(start, aim, 60, 0xfb7185);
+    if (Math.random() < 0.2 + lvl * 0.15) applyKnockback(localPlayer, 4 + lvl, 6 + lvl * 2, aim);
+  }
+  if (b.y < -25) {
+    respawn(b, -12); localPlayer.score++;
+    $('hudP1Score').textContent = localPlayer.score;
+  }
+}
+
+// ---------- COMBAT & FX ----------
+function tracer(start, dir, range, color) {
+  const geo = new THREE.BufferGeometry().setFromPoints([start, start.clone().addScaledVector(dir, range)]);
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 });
+  const line = new THREE.Line(geo, mat); scene.add(line);
+  setTimeout(() => { scene.remove(line); geo.dispose(); mat.dispose(); }, 70);
+}
+let pGeo;
+function burst(pos, color, n) {
+  pGeo = pGeo || new THREE.SphereGeometry(0.09, 8, 6);
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(pGeo, new THREE.MeshBasicMaterial({ color, transparent: true }));
+    m.position.copy(pos);
+    particles.push({ m, v: new THREE.Vector3(Math.random() - .5, Math.random() - .2, Math.random() - .5).multiplyScalar(7), life: 0.5 });
+    scene.add(m);
+  }
+}
+function fireWeapon() {
+  const now = performance.now(), w = WEAPONS[localPlayer.weapon];
+  if (now - lastShot < w.fireRate) return;
+  lastShot = now;
+  const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+  const origin = new THREE.Vector3(localPlayer.x, localPlayer.y + 0.8, localPlayer.z);
+  for (let i = 0; i < (w.count || 1); i++) {
+    const d = dir.clone();
+    if (w.spread) { d.x += (Math.random() - .5) * w.spread; d.y += (Math.random() - .5) * w.spread; d.z += (Math.random() - .5) * w.spread; d.normalize(); }
+    if (remotePlayer.connected) {
+      const hit = new THREE.Raycaster(origin, d, 0.1, w.range).intersectObject(remotePlayer.mesh, true)[0];
+      if (hit) {
+        burst(hit.point, w.color, 6);
+        if (botMode) applyKnockback(remotePlayer, w.damage, w.knockback, d);
+        else if (conn && conn.open) conn.send({ type: 'HIT', damage: w.damage, knockback: w.knockback, dirX: d.x, dirY: d.y, dirZ: d.z });
+      }
+    }
+    const start = origin.clone().add(new THREE.Vector3(0, -0.3, 0));
+    tracer(start, d, w.range, w.color);
+    if (conn && conn.open) conn.send({ type: 'TRACER', sx: start.x, sy: start.y, sz: start.z, dx: d.x, dy: d.y, dz: d.z, range: w.range, color: w.color });
+  }
+  gunKick = 0.12;
+}
+
+// ---------- INPUT ----------
+function setupInput() {
+  btnStart.addEventListener('click', requestLock);
+  $('btnResume').addEventListener('click', requestLock);
+  document.addEventListener('pointerlockchange', onLockChange);
+  document.addEventListener('pointerlockerror', lockFailed);
+  document.addEventListener('mousemove', e => {
+    if (!inputActive()) return;
+    localPlayer.yaw -= e.movementX * userSettings.sensitivity;
+    localPlayer.pitch = Math.max(-1.4, Math.min(1.4, localPlayer.pitch - e.movementY * userSettings.sensitivity));
+  });
+  document.addEventListener('mousedown', e => { if (e.button === 0 && inputActive()) mouseDown = true; });
+  document.addEventListener('mouseup', e => { if (e.button === 0) mouseDown = false; });
+  addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyW') e.preventDefault();
+    if (e.code === 'KeyW') keys.w = true; if (e.code === 'KeyA') keys.a = true;
+    if (e.code === 'KeyS') keys.s = true; if (e.code === 'KeyD') keys.d = true;
+    if (e.code === 'Space' && !e.repeat && inputActive()) jump();
+    if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !e.repeat && inputActive()) dash();
+    const typing = /INPUT|SELECT/.test(document.activeElement.tagName);
+    if (e.code === 'Backslash' && myAdmin && !typing) { e.preventDefault(); toggleAdmin(); }
+    if (e.code === 'Tab' && !typing) { e.preventDefault(); showSb(true); }
+    if (e.code === 'Digit1') switchWeapon(1); if (e.code === 'Digit2') switchWeapon(2); if (e.code === 'Digit3') switchWeapon(3);
+    // Esc normally exits pointer lock itself; this covers the case where the lock never started
+    if (e.code === 'Escape' && isGameActive && !isPointerLocked) showPause();
+  });
+  addEventListener('keyup', e => {
+    if (e.code === 'Tab') showSb(false);
+    if (e.code === 'KeyW') keys.w = false; if (e.code === 'KeyA') keys.a = false;
+    if (e.code === 'KeyS') keys.s = false; if (e.code === 'KeyD') keys.d = false;
+  });
+  switchWeapon(1);
+}
+function switchWeapon(i) {
+  localPlayer.weapon = i;
+  [1, 2, 3].forEach(n => $('wpn' + n).className = 'glass px-4 py-2 rounded-xl text-center ' + (n === i ? 'ring-2 ring-cyan-300' : 'opacity-60'));
+  if (gun) setGunModel(i);
+}
+function jump() {
+  const p = localPlayer;
+  if (p.isGrounded) { p.vy = 12; p.isGrounded = false; }
+  else if (p.canDoubleJump) { p.vy = 10; p.canDoubleJump = false; }
+}
+function dash() {
+  const p = localPlayer; if (p.dashCooldown > 0) return;
+  p.dashCooldown = 1.5;
+  const up = new THREE.Vector3(0, 1, 0);
+  const f = new THREE.Vector3(0, 0, -1).applyAxisAngle(up, p.yaw), s = new THREE.Vector3(1, 0, 0).applyAxisAngle(up, p.yaw);
+  const d = new THREE.Vector3();
+  if (keys.w) d.add(f); if (keys.s) d.sub(f); if (keys.a) d.sub(s); if (keys.d) d.add(s);
+  if (!d.lengthSq()) d.copy(f);
+  d.normalize(); p.vx += d.x * 24; p.vz += d.z * 24;
+}
+
+// ---------- POINTER LOCK / PAUSE / SETTINGS ----------
+function mountSettings(slot) { $(slot).appendChild(settingsControls); settingsControls.classList.remove('hidden'); }
+function showPause() { pauseOverlay.classList.remove('hidden'); mountSettings('pauseSettingsSlot'); }
+
+function startGame() {
+  isGameActive = true;
+  botMode = !(conn && conn.open);
+  remotePlayer.connected = botMode || remotePlayer.connected;
+  if (botMode) {
+    buildArena(+$('mapSelect').value); oppName = 'Bot'; oppAdmin = false;
+    $('hudRoomCode').textContent = 'SOLO'; $('p2StatusText').textContent = 'Practice bot';
+  }
+  refreshNames();
+  menuOverlay.classList.add('hidden');
+  ['hud', 'weaponHud', 'crosshair'].forEach(id => $(id).classList.remove('hidden'));
+}
+function requestLock() {
+  const wait = 1300 - (performance.now() - lastLockExit);
+  if (wait > 0 && isGameActive) { $('pauseHint').textContent = 'One second, then click Resume again.'; return; }
+  if (!isGameActive) startGame();
+  try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(lockFailed); } catch (e) { lockFailed(); }
+}
+function lockFailed() {
+  noLock = true; pauseOverlay.classList.add('hidden');
+  $('hudRoleTag').textContent = 'Mouse lock unavailable, playing without it (Esc pauses)';
+}
+function onLockChange() {
+  if (document.pointerLockElement === canvas) {
+    isPointerLocked = true; noLock = false; pauseOverlay.classList.add('hidden');
+    $('pauseHint').textContent = 'Click Resume to get back in.';
+  } else {
+    isPointerLocked = false; mouseDown = false; lastLockExit = performance.now();
+    for (const k in keys) keys[k] = false;
+    if (isGameActive) showPause();
+  }
+}
+
+function setupSettings() {
+  const bind = (id, fn) => $(id).addEventListener('input', e => fn(e.target.value));
+  bind('sensSlider', v => { $('sensVal').textContent = (+v).toFixed(1); userSettings.sensitivity = v * 0.001; });
+  bind('fovSlider', v => { $('fovVal').textContent = v + '°'; userSettings.fov = +v; camera.fov = +v; camera.updateProjectionMatrix(); });
+  $('crosshairStyle').addEventListener('change', e => { userSettings.crosshairStyle = e.target.value; updateCrosshair(); });
+  bind('crosshairColor', v => { userSettings.crosshairColor = v; updateCrosshair(); });
+  bind('crosshairSize', v => { $('sizeVal').textContent = v + 'px'; userSettings.crosshairSize = +v; updateCrosshair(); });
+  bind('botSlider', v => { userSettings.botLevel = +v; $('botVal').textContent = ['Easy', 'Normal', 'Hard'][v - 1]; });
+  updateCrosshair();
+
+  // persist settings in localStorage
+  const ids = ['sensSlider', 'fovSlider', 'crosshairStyle', 'crosshairColor', 'crosshairSize', 'botSlider'];
+  try {
+    const saved = JSON.parse(localStorage.getItem('knockbackSettings') || '{}');
+    ids.forEach(id => {
+      if (saved[id] === undefined) return;
+      $(id).value = saved[id];
+      $(id).dispatchEvent(new Event(id === 'crosshairStyle' ? 'change' : 'input'));
+    });
+  } catch (e) {}
+  const save = () => {
+    try { localStorage.setItem('knockbackSettings', JSON.stringify(Object.fromEntries(ids.map(id => [id, $(id).value])))); } catch (e) {}
+  };
+  settingsControls.addEventListener('input', save);
+  settingsControls.addEventListener('change', save);
+}
+function updateCrosshair() {
+  const { crosshairSize: s, crosshairColor: c, crosshairStyle: st } = userSettings;
+  crosshair.style.width = crosshair.style.height = s + 'px';
+  crosshair.innerHTML = {
+    cross: `<div style="position:absolute;width:100%;height:2px;background:${c};top:calc(50% - 1px);border-radius:1px"></div><div style="position:absolute;height:100%;width:2px;background:${c};left:calc(50% - 1px);border-radius:1px"></div>`,
+    dot: `<div style="width:50%;height:50%;background:${c};border-radius:50%"></div>`,
+    circle: `<div style="width:100%;height:100%;border:2px solid ${c};border-radius:50%"></div>`,
+    box: `<div style="width:100%;height:100%;border:2px solid ${c};border-radius:3px"></div>`
+  }[st];
+}
+
+const ON = 'flex-1 py-2 text-xs font-bold rounded-lg bg-cyan-400 text-slate-950', OFF = 'flex-1 py-2 text-xs font-bold rounded-lg text-slate-400 hover:text-white';
+function setTab(t) {
+  for (const k in tabs) tabs[k].className = k === t ? ON : OFF;
+  $('multiControls').classList.toggle('hidden', t !== 'multi');
+  if (t === 'settings') mountSettings('menuSettingsSlot'); else settingsControls.classList.add('hidden');
+  $('findControls').classList.toggle('hidden', t !== 'find');
+  if (t === 'multi' || t === 'find') connectWS();
+}
+// ---------- IDENTITY ----------
+const store = {
+  get: (k, d = '') => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+const deviceId = store.get('kb_device') || (() => { const v = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()); store.set('kb_device', v); return v; })();
+const cleanName = s => String(s).replace(/[^\w .\-]/g, '').trim().slice(0, 16);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let myName = cleanName(store.get('kb_name')) || 'Player' + (100 + Math.floor(Math.random() * 900));
+let oppName = 'Bot', oppAdmin = false, myAdmin = false, remoteTag = null;
+
+function setTag(name, admin) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+  const g = c.getContext('2d'), t = (admin ? '🔨 ' : '') + name;
+  g.font = 'bold 60px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 10; g.strokeStyle = 'rgba(0,0,0,.65)'; g.strokeText(t, 256, 64); g.fillStyle = '#fff'; g.fillText(t, 256, 64);
+  if (remoteTag.material.map) remoteTag.material.map.dispose();
+  remoteTag.material.map = new THREE.CanvasTexture(c); remoteTag.material.needsUpdate = true;
+}
+function refreshNames() {
+  $('hudP1Name').textContent = myName + (myAdmin ? ' 🔨' : '');
+  $('hudP2Name').textContent = oppName + (oppAdmin ? ' 🔨' : '');
+  if (remoteTag) setTag(oppName, oppAdmin);
+}
+function showSb(on) {
+  $('scoreboard').classList.toggle('hidden', !on); clearInterval(showSb.t);
+  if (!on) return;
+  const draw = () => {
+    const rows = [[myName, myAdmin, localPlayer.score], [oppName, oppAdmin, remotePlayer.score]].sort((a, b) => b[2] - a[2]);
+    $('sbRows').innerHTML = rows.map(([n, a, s], i) => `<div class="flex justify-between py-1 font-semibold ${i ? 'text-slate-200' : 'text-amber-300'}"><span>${a ? '🔨 ' : ''}${esc(n)}</span><span>${s}</span></div>`).join('');
+  };
+  draw(); showSb.t = setInterval(draw, 250);
+}
+
+// ---------- NETWORK (Cloudflare Worker) ----------
+const WS_URL = 'wss://knockbackpvp.zertztt.workers.dev/ws';
+let ws = null, wsReady = false, banned = false, pending = [], adminTimer = null;
+const setStatus = (t, bad) => ['netStatus', 'findStatus'].forEach(id => { $(id).textContent = t; $(id).style.color = bad ? '#fb7185' : ''; });
+const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+const findUI = on => { $('btnFind').classList.toggle('hidden', on); $('btnCancelFind').classList.toggle('hidden', !on); };
+function whenReady(fn) { if (wsReady) fn(); else { pending.push(fn); connectWS(); } }
+function connectWS() {
+  if (banned || (ws && ws.readyState <= 1)) return;
+  setStatus('Connecting...');
+  try { ws = new WebSocket(WS_URL); } catch (e) { return setStatus('Could not reach the server.', true); }
+  ws.onopen = () => send({ t: 'hello', name: myName, device: deviceId, key: store.get('kb_key') });
+  ws.onmessage = e => { try { onServer(JSON.parse(e.data)); } catch (err) {} };
+  ws.onclose = () => { wsReady = false; ws = null; if (conn) endOnline('Lost connection to the server.'); };
+  ws.onerror = () => setStatus('Could not reach the server.', true);
+}
+function setAdmin(a) { myAdmin = a; if (!a) toggleAdmin(false); refreshNames(); }
+function onServer(m) {
+  switch (m.t) {
+    case 'ready':
+      wsReady = true; setAdmin(m.admin);
+      if (store.get('kb_key') && !m.admin) { store.set('kb_key', ''); setStatus('Admin key was wrong.', true); } else setStatus('Connected.');
+      pending.splice(0).forEach(f => f()); break;
+    case 'authed': setAdmin(m.admin); if (!m.admin) { store.set('kb_key', ''); console.warn('Wrong admin key.'); } break;
+    case 'banned': banned = true; pending = [];
+      setStatus('You are banned ' + (m.until ? 'until ' + new Date(m.until).toLocaleString() : 'permanently') + (m.reason ? ': ' + m.reason : '') + '.', true); break;
+    case 'hosted': $('hudRoomCode').textContent = m.code; setStatus('Room code: ' + m.code + ' (waiting for opponent...)'); break;
+    case 'queued': findUI(true); setStatus('Searching for an opponent...'); break;
+    case 'error': findUI(false); setStatus(m.msg, true); break;
+    case 'matched': findUI(false); startOnline(m); break;
+    case 'relay': onNet(m.d); break;
+    case 'opp_left': endOnline('Opponent left. A bot took over.'); break;
+    case 'kicked': leaveGame(); setStatus('You were kicked by an admin.', true); break;
+    case 'fling':
+      localPlayer.vx += (Math.random() - .5) * 70; localPlayer.vz += (Math.random() - .5) * 70; localPlayer.vy += 35; localPlayer.isGrounded = false; break;
+    case 'players': renderAdmin(m.list); break;
+  }
+}
+function onNet(d) {
+  if (d.type === 'SYNC') Object.assign(remotePlayer, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, percent: d.percent });
+  else if (d.type === 'TRACER') tracer(new THREE.Vector3(d.sx, d.sy, d.sz), new THREE.Vector3(d.dx, d.dy, d.dz), d.range, d.color);
+  else if (d.type === 'HIT') applyKnockback(localPlayer, d.damage, d.knockback, { x: d.dirX, y: d.dirY, z: d.dirZ });
+  else if (d.type === 'KO') { localPlayer.score++; $('hudP1Score').textContent = localPlayer.score; }
+}
+function startOnline(m) {
+  conn = { open: true, send: o => send({ t: 'relay', d: o }) };
+  botMode = false; oppName = m.opp.name; oppAdmin = m.opp.admin;
+  buildArena(m.map);
+  localPlayer.score = remotePlayer.score = 0; $('hudP1Score').textContent = $('hudP2Score').textContent = '0';
+  respawn(localPlayer, m.role === 'a' ? 12 : -12); remotePlayer.percent = 0; remotePlayer.connected = true;
+  if (!isGameActive) startGame();
+  $('hudRoomCode').textContent = m.code; $('p2StatusText').textContent = 'Online'; $('hudRoleTag').textContent = 'Press Esc for settings';
+  refreshNames(); showPause(); $('pauseHint').textContent = 'Match found! Click Resume to lock your mouse.';
+}
+function endOnline(msg) {
+  conn = null; botMode = true; oppName = 'Bot'; oppAdmin = false; respawn(remotePlayer, -12); remotePlayer.connected = isGameActive;
+  $('p2StatusText').textContent = 'Practice bot'; $('hudRoomCode').textContent = 'SOLO'; $('hudRoleTag').textContent = msg;
+  refreshNames(); if (!isGameActive) setStatus(msg, true);
+}
+
+// ---------- ADMIN ----------
+function toggleAdmin(force) {
+  const p = $('adminPanel'), open = force === undefined ? p.classList.contains('hidden') : force;
+  p.classList.toggle('hidden', !open); clearInterval(adminTimer);
+  if (!open) return;
+  if (document.pointerLockElement) document.exitPointerLock();
+  send({ t: 'players' }); adminTimer = setInterval(() => send({ t: 'players' }), 2000);
+}
+function renderAdmin(list) {
+  $('adminList').innerHTML = list.map(p => `<div class="flex items-center gap-1 bg-slate-900/70 rounded-lg p-1.5"><span class="flex-1 truncate">${p.admin ? '🔨 ' : ''}${esc(p.name)} <span class="text-slate-500">${p.room || 'lobby'}</span></span>${p.me || p.admin ? '' : `<button data-act="kick" data-id="${p.id}" class="px-2 py-1 rounded bg-slate-700 hover:bg-amber-500">Kick</button><button data-act="ban" data-id="${p.id}" class="px-2 py-1 rounded bg-slate-700 hover:bg-rose-500">Ban</button>`}</div>`).join('') || '<div class="text-slate-500">Nobody online</div>';
+}
+// type developermode=true in the console; the SERVER checks your key, so only real admins get the hammer
+Object.defineProperty(window, 'developermode', {
+  configurable: true, get: () => myAdmin,
+  set: v => {
+    if (v === true) {
+      const k = store.get('kb_key') || prompt('Admin key:'); if (!k) return;
+      store.set('kb_key', k); store.set('kb_dev', '1');
+      if (wsReady) send({ t: 'auth', key: k }); else connectWS();
+    } else { store.set('kb_key', ''); store.set('kb_dev', ''); send({ t: 'auth', key: '' }); setAdmin(false); }
+  }
+});
+
+function leaveGame() {
+  isGameActive = false; mouseDown = false; botMode = true; conn = null; oppName = 'Bot'; oppAdmin = false;
+  if (document.pointerLockElement) document.exitPointerLock();
+  send({ t: 'leave' }); findUI(false);
+  respawn(localPlayer, 12); respawn(remotePlayer, -12);
+  localPlayer.score = remotePlayer.score = 0; remotePlayer.connected = false;
+  $('hudP1Score').textContent = '0'; $('hudP2Score').textContent = '0'; $('hudRoomCode').textContent = 'SOLO';
+  pauseOverlay.classList.add('hidden');
+  ['hud', 'weaponHud', 'crosshair'].forEach(id => $(id).classList.add('hidden'));
+  menuOverlay.classList.remove('hidden');
+  setStatus(''); setTab('solo');
+}
+function setupTabs() {
+  $('btnLeave').onclick = leaveGame;
+  tabs.solo.onclick = () => setTab('solo'); tabs.multi.onclick = () => setTab('multi'); tabs.find.onclick = () => setTab('find'); tabs.settings.onclick = () => setTab('settings');
+  $('btnHost').onclick = () => whenReady(() => send({ t: 'host', map: +$('mapSelect').value }));
+  $('btnJoin').onclick = () => {
+    const code = $('inputRoomCode').value.trim().toUpperCase();
+    if (code.length < 4) return setStatus('Enter a 4-character code.', true);
+    whenReady(() => send({ t: 'join', code }));
+  };
+  $('btnFind').onclick = () => whenReady(() => send({ t: 'queue' }));
+  $('btnCancelFind').onclick = () => { send({ t: 'cancel' }); findUI(false); setStatus('Search cancelled.'); };
+  $('btnFling').onclick = () => send({ t: 'fling' });
+  $('btnUnban').onclick = () => send({ t: 'unban' });
+  $('adminList').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    send(b.dataset.act === 'kick' ? { t: 'kick', id: b.dataset.id } : { t: 'ban', id: b.dataset.id, mins: +$('banTime').value });
+    setTimeout(() => send({ t: 'players' }), 300);
+  };
+  const ni = $('nameInput'); ni.value = myName;
+  ni.oninput = () => { const v = cleanName(ni.value); if (!v) return; myName = v; store.set('kb_name', v); send({ t: 'name', name: v }); refreshNames(); };
+  $('mapSelect').value = store.get('kb_map', '0'); $('mapSelect').onchange = e => store.set('kb_map', e.target.value);
+  setTab('solo');
+}
+
+// ---------- LOOP ----------
+let last = performance.now(), shown = [-1, -1];
+function simulate(dt) {
+  time += dt;
+  // solo freezes while paused; online keeps running (also while the tab is hidden)
+  if (isGameActive && (inputActive() || !botMode)) { updateLocal(dt); if (botMode) updateBot(dt); }
+}
+function tickDt() { const now = performance.now(), dt = Math.min((now - last) / 1000, 0.05); last = now; return dt; }
+// requestAnimationFrame stops in background tabs, so a worker timer keeps the physics (and knockback) running
+function startTick() {
+  try {
+    const w = new Worker(URL.createObjectURL(new Blob(['setInterval(()=>postMessage(0),16)'], { type: 'text/javascript' })));
+    w.onmessage = () => { if (document.hidden) simulate(tickDt()); };
+  } catch (e) {}
+}
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = tickDt(); simulate(dt);
+  camera.rotation.order = 'YXZ';
+  camera.rotation.set(localPlayer.pitch, localPlayer.yaw, 0);
+  camera.position.set(localPlayer.x, localPlayer.y + 0.8, localPlayer.z);
+
+  const rm = remotePlayer.mesh;
+  rm.visible = remotePlayer.connected;
+  rm.position.lerp(new THREE.Vector3(remotePlayer.x, remotePlayer.y - 0.13, remotePlayer.z), botMode ? 1 : 0.35);
+  rm.rotation.y = remotePlayer.yaw;
+
+  gunKick *= 0.82; gun.position.z = -0.5 + gunKick;
+  bouncePads.forEach((p, i) => p.userData.glow.scale.setScalar(1 + Math.sin(time * 3 + i) * 0.06));
+  floaters.forEach(f => { f.position.y = f.userData.baseY + Math.sin(time * f.userData.sp + f.userData.ph) * 1.2; f.rotation.y += dt * 0.1; });
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i]; p.life -= dt;
+    p.v.y -= 15 * dt; p.m.position.addScaledVector(p.v, dt); p.m.material.opacity = Math.max(0, p.life * 2);
+    if (p.life <= 0) { scene.remove(p.m); p.m.material.dispose(); particles.splice(i, 1); }
+  }
+  const a = Math.round(localPlayer.percent), b = Math.round(remotePlayer.percent);
+  if (a !== shown[0]) { shown[0] = a; $('hudP1Percent').textContent = a + '%'; }
+  if (b !== shown[1]) { shown[1] = b; $('hudP2Percent').textContent = b + '%'; }
+  renderer.render(scene, camera);
+}
+
+const btnStart = $('btnStart');
+function loadThree(urls, done) {
+  if (typeof THREE !== 'undefined') return done();
+  const url = urls.shift();
+  if (!url) {
+    document.querySelector('#menuOverlay h1').insertAdjacentHTML('afterend',
+      '<p class="text-rose-400 text-sm mb-4">Could not load the 3D library. Check your connection or ad blocker and reload.</p>');
+    return;
+  }
+  const s = document.createElement('script');
+  s.src = url; s.onload = () => loadThree(urls, done); s.onerror = () => loadThree(urls, done);
+  document.head.appendChild(s);
+}
+function boot() {
+  loadThree([
+    'https://cdn.jsdelivr.net/npm/three@0.136.0/build/three.min.js',
+    'https://unpkg.com/three@0.136.0/build/three.min.js'
+  ], () => { initThree(); setupInput(); setupSettings(); setupTabs(); refreshNames(); startTick(); animate(); if (store.get('kb_dev')) connectWS(); });
+}
+if (document.readyState === 'loading') addEventListener('DOMContentLoaded', boot); else boot();
+</script>
+</body>
+</html>
