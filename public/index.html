@@ -77,7 +77,7 @@ input[type=range]{accent-color:#22d3ee}
   <div class="glass p-8 rounded-3xl max-w-md w-full shadow-2xl text-slate-100 text-center">
     <svg viewBox="0 0 64 64" width="84" height="84" class="mx-auto mb-1"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#67e8f9"/><stop offset="1" stop-color="#fb7185"/></linearGradient></defs><circle cx="32" cy="32" r="29" fill="#0f172a" stroke="url(#lg)" stroke-width="4"/><circle cx="17" cy="32" r="3" fill="#67e8f9"/><path d="M23 40h14v9l19-17-19-17v9H23z" fill="url(#lg)"/></svg>
     <h1 class="text-4xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-rose-400 mb-1">KNOCKBACK PVP</h1>
-    <p class="text-slate-400 text-sm mb-5">Launch your opponent off the map. <span class="text-slate-600 text-[10px]">build 9</span></p>
+    <p class="text-slate-400 text-sm mb-5">Launch your opponent off the map. <span class="text-slate-600 text-[10px]">build 10</span></p>
     <div class="flex gap-2 mb-4">
       <input id="nameInput" maxlength="16" placeholder="Your name" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-100 focus:outline-none focus:border-cyan-400">
       <select id="mapSelect" class="bg-slate-900 border border-slate-700 rounded-xl px-3 text-xs font-semibold text-slate-200"><option value="0">Neon Island</option><option value="1">Skyline Rooftop</option><option value="2">Frozen Ring</option></select>
@@ -153,7 +153,7 @@ const bouncePads = [], floaters = [], particles = [];
 const WEAPONS = {
   1: { fireRate: 150, damage: 7, knockback: 11, range: 150, spread: 0.02, color: 0x67e8f9 },
   2: { fireRate: 650, damage: 4, knockback: 7, range: 100, spread: 0.12, count: 6, color: 0xfb7185 },
-  3: { fireRate: 900, damage: 22, knockback: 32, range: 200, spread: 0, color: 0xfbbf24 }
+  3: { fireRate: 900, damage: 22, knockback: 32, range: 200, spread: 0, color: 0xfbbf24, rocket: true, speed: 48, radius: 5.5 }
 };
 let lastShot = 0, dbgShots = 0, dbgErr = '';
 addEventListener('error', e => { dbgErr = e.message; });
@@ -516,6 +516,60 @@ function updateBot(dt) {
   }
 }
 
+// ---------- ROCKETS: a real projectile with splash knockback ----------
+const rockets = [];
+function launchRocket(pos, dir, own) {
+  const g = new THREE.Group();
+  const body = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.5, roughness: 0.4 });
+  const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.6, 12), body);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.25, 12), new THREE.MeshStandardMaterial({ color: 0xef4444 })); nose.position.y = 0.42;
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.4, 10), new THREE.MeshBasicMaterial({ color: 0xfbbf24 })); flame.rotation.x = Math.PI; flame.position.y = -0.45;
+  g.add(cyl, nose, flame); g.position.copy(pos);
+  g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()); scene.add(g);
+  rockets.push({ pos: pos.clone(), dir: dir.clone().normalize(), speed: WEAPONS[3].speed, life: 3.5, mesh: g, own });
+}
+function removeRocket(i) { scene.remove(rockets[i].mesh); rockets.splice(i, 1); }
+function blast(pt) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.6 }));
+  m.position.copy(pt); scene.add(m); particles.push({ m, v: new THREE.Vector3(), life: 0.35, grow: true });
+}
+function explode(pt, own) {
+  const w = WEAPONS[3], R = w.radius;
+  blast(pt); burst(pt, 0xfbbf24, 22);
+  if (!own) return; // the other player's rockets only show visuals here; they send us HIT if we are caught
+  if (remotePlayer.connected) {
+    const to = new THREE.Vector3(remotePlayer.x, remotePlayer.y, remotePlayer.z).sub(pt), dist = to.length();
+    if (dist < R) {
+      const f = 0.4 + 0.6 * (1 - dist / R), dir = to.normalize(); dir.y = Math.max(dir.y, 0.4); dir.normalize();
+      if (botMode) applyKnockback(remotePlayer, w.damage * f, w.knockback * f, dir);
+      else if (conn && conn.open) conn.send({ type: 'HIT', damage: w.damage * f, knockback: w.knockback * f, dirX: dir.x, dirY: dir.y, dirZ: dir.z });
+    }
+  }
+  // rocket-jump: your own blast pushes you at half strength and does no damage
+  const me = new THREE.Vector3(localPlayer.x, localPlayer.y, localPlayer.z).sub(pt), md = me.length();
+  if (md < R) { const dir = me.normalize(); dir.y = Math.max(dir.y, 0.5); dir.normalize(); applyKnockback(localPlayer, 0, w.knockback * 0.5 * (1 - md / R), dir); }
+  if (conn && conn.open) conn.send({ type: 'EXPLODE', x: pt.x, y: pt.y, z: pt.z });
+}
+function updateRockets(dt) {
+  for (let i = rockets.length - 1; i >= 0; i--) {
+    const r = rockets[i], step = r.speed * dt, dir = r.dir;
+    r.life -= dt;
+    if (r.own) {
+      let hitT = Infinity;
+      const wb = rayBlock(r.pos, dir, step); if (wb < step) hitT = wb;                       // walls and cover
+      if (dir.y < 0 && r.pos.y > 0) { const t = r.pos.y / -dir.y; if (t <= step && onPlat(r.pos.x + dir.x * t, r.pos.z + dir.z * t)) hitT = Math.min(hitT, t); } // floor
+      if (remotePlayer.connected) {                                                           // direct hit on the player
+        const to = new THREE.Vector3(remotePlayer.x, remotePlayer.y, remotePlayer.z).sub(r.pos), along = Math.max(0, Math.min(step, to.dot(dir)));
+        if (to.distanceTo(dir.clone().multiplyScalar(along)) < 1.2) hitT = Math.min(hitT, along);
+      }
+      if (hitT <= step) { explode(r.pos.clone().addScaledVector(dir, hitT), true); removeRocket(i); continue; }
+    }
+    r.pos.addScaledVector(dir, step); r.mesh.position.copy(r.pos);
+    if (Math.random() < 0.6) burst(r.pos.clone(), 0xfb923c, 1);
+    if (r.life <= 0 || r.pos.y < -45 || r.pos.length() > 250) removeRocket(i);
+  }
+}
+
 // ---------- COMBAT & FX ----------
 function tracer(start, dir, range, color) {
   const len = Math.min(range, 120);
@@ -543,6 +597,12 @@ function fireWeapon() {
   lastShot = now; dbgShots++;
   const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
   const origin = new THREE.Vector3(localPlayer.x, localPlayer.y + 0.8, localPlayer.z);
+  if (w.rocket) { // rockets are projectiles, not hitscan
+    const sp = origin.clone().add(new THREE.Vector3(0, -0.3, 0)).addScaledVector(dir, 1);
+    launchRocket(sp, dir, true);
+    if (conn && conn.open) conn.send({ type: 'ROCKET', x: sp.x, y: sp.y, z: sp.z, dx: dir.x, dy: dir.y, dz: dir.z });
+    gunKick = 0.2; return;
+  }
   for (let i = 0; i < (w.count || 1); i++) {
     const d = dir.clone();
     if (w.spread) { d.x += (Math.random() - .5) * w.spread; d.y += (Math.random() - .5) * w.spread; d.z += (Math.random() - .5) * w.spread; d.normalize(); }
@@ -797,6 +857,8 @@ function onNet(d) {
   if (d.type === 'SYNC') Object.assign(remotePlayer, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, percent: d.percent });
   else if (d.type === 'TRACER') tracer(new THREE.Vector3(d.sx, d.sy, d.sz), new THREE.Vector3(d.dx, d.dy, d.dz), d.range, d.color);
   else if (d.type === 'HIT') applyKnockback(localPlayer, d.damage, d.knockback, { x: d.dirX, y: d.dirY, z: d.dirZ });
+  else if (d.type === 'ROCKET') launchRocket(new THREE.Vector3(d.x, d.y, d.z), new THREE.Vector3(d.dx, d.dy, d.dz), false);
+  else if (d.type === 'EXPLODE') { const k = rockets.findIndex(r => !r.own); if (k >= 0) removeRocket(k); explode(new THREE.Vector3(d.x, d.y, d.z), false); }
   else if (d.type === 'KO') { localPlayer.score++; grantBoost(); $('hudP1Score').textContent = localPlayer.score; }
 }
 function startOnline(m) {
@@ -842,6 +904,7 @@ function leaveGame() {
   isGameActive = false; mouseDown = false; botMode = true; conn = null; oppName = 'Bot'; oppAdmin = false;
   if (document.pointerLockElement) document.exitPointerLock();
   send({ t: 'leave' }); findUI(false);
+  while (rockets.length) removeRocket(0);
   respawn(localPlayer, 12); respawn(remotePlayer, -12);
   localPlayer.score = remotePlayer.score = 0; remotePlayer.connected = false; localPlayer.boosts = 0; updateBoostHud();
   $('hudP1Score').textContent = '0'; $('hudP2Score').textContent = '0'; $('hudRoomCode').textContent = 'SOLO';
@@ -879,7 +942,7 @@ let last = performance.now(), shown = [-1, -1];
 function simulate(dt) {
   time += dt;
   // solo freezes while paused; online keeps running (also while the tab is hidden)
-  if (isGameActive && (inputActive() || !botMode)) { updateLocal(dt); if (botMode) updateBot(dt); }
+  if (isGameActive && (inputActive() || !botMode)) { updateLocal(dt); updateRockets(dt); if (botMode) updateBot(dt); }
 }
 function tickDt() { const now = performance.now(), dt = Math.min((now - last) / 1000, 0.05); last = now; return dt; }
 // requestAnimationFrame stops in background tabs, so a worker timer keeps the physics (and knockback) running
@@ -906,13 +969,14 @@ function animate() {
   floaters.forEach(f => { f.position.y = f.userData.baseY + Math.sin(time * f.userData.sp + f.userData.ph) * 1.2; f.rotation.y += dt * 0.1; });
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i]; p.life -= dt;
-    p.v.y -= 15 * dt; p.m.position.addScaledVector(p.v, dt); p.m.material.opacity = Math.max(0, p.life * 2);
+    if (p.grow) p.m.scale.setScalar(1 + (0.35 - p.life) * 12); else p.v.y -= 15 * dt;
+    p.m.position.addScaledVector(p.v, dt); p.m.material.opacity = Math.max(0, p.life * 2);
     if (p.life <= 0) { scene.remove(p.m); p.m.material.dispose(); particles.splice(i, 1); }
   }
   const a = Math.round(localPlayer.percent), b = Math.round(remotePlayer.percent);
   if (a !== shown[0]) { shown[0] = a; $('hudP1Percent').textContent = a + '%'; }
   if (b !== shown[1]) { shown[1] = b; $('hudP2Percent').textContent = b + '%'; }
-  $('dbg').textContent = 'build 9 | lock:' + (isPointerLocked ? 'yes' : 'no') + ' | shots:' + dbgShots + (dbgErr ? ' | error: ' + dbgErr : '');
+  $('dbg').textContent = 'build 10 | lock:' + (isPointerLocked ? 'yes' : 'no') + ' | shots:' + dbgShots + (dbgErr ? ' | error: ' + dbgErr : '');
   renderer.render(scene, camera);
 }
 
