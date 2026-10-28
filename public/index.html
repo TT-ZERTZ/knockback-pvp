@@ -76,7 +76,7 @@ input[type=range]{accent-color:#22d3ee}
   <div class="glass p-8 rounded-3xl max-w-md w-full shadow-2xl text-slate-100 text-center">
     <svg viewBox="0 0 64 64" width="84" height="84" class="mx-auto mb-1"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#67e8f9"/><stop offset="1" stop-color="#fb7185"/></linearGradient></defs><circle cx="32" cy="32" r="29" fill="#0f172a" stroke="url(#lg)" stroke-width="4"/><circle cx="17" cy="32" r="3" fill="#67e8f9"/><path d="M23 40h14v9l19-17-19-17v9H23z" fill="url(#lg)"/></svg>
     <h1 class="text-4xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-rose-400 mb-1">KNOCKBACK PVP</h1>
-    <p class="text-slate-400 text-sm mb-5">Launch your opponent off the map.</p>
+    <p class="text-slate-400 text-sm mb-5">Launch your opponent off the map. <span class="text-slate-600 text-[10px]">build 6</span></p>
     <div class="flex gap-2 mb-4">
       <input id="nameInput" maxlength="16" placeholder="Your name" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-100 focus:outline-none focus:border-cyan-400">
       <select id="mapSelect" class="bg-slate-900 border border-slate-700 rounded-xl px-3 text-xs font-semibold text-slate-200"><option value="0">Neon Island</option><option value="1">Skyline Rooftop</option><option value="2">Frozen Ring</option></select>
@@ -428,10 +428,14 @@ function updateBot(dt) {
 
 // ---------- COMBAT & FX ----------
 function tracer(start, dir, range, color) {
-  const geo = new THREE.BufferGeometry().setFromPoints([start, start.clone().addScaledVector(dir, range)]);
-  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 });
-  const line = new THREE.Line(geo, mat); scene.add(line);
-  setTimeout(() => { scene.remove(line); geo.dispose(); mat.dispose(); }, 70);
+  const len = Math.min(range, 120);
+  const geo = new THREE.CylinderGeometry(0.03, 0.03, len, 6);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 });
+  const beam = new THREE.Mesh(geo, mat);
+  beam.position.copy(start).addScaledVector(dir, len / 2);
+  beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  scene.add(beam);
+  setTimeout(() => { scene.remove(beam); geo.dispose(); mat.dispose(); }, 90);
 }
 let pGeo;
 function burst(pos, color, n) {
@@ -453,7 +457,8 @@ function fireWeapon() {
     const d = dir.clone();
     if (w.spread) { d.x += (Math.random() - .5) * w.spread; d.y += (Math.random() - .5) * w.spread; d.z += (Math.random() - .5) * w.spread; d.normalize(); }
     if (remotePlayer.connected) {
-      const hit = new THREE.Raycaster(origin, d, 0.1, w.range).intersectObject(remotePlayer.mesh, true)[0];
+      const rc = new THREE.Raycaster(origin, d, 0.1, w.range); rc.camera = camera;
+      let hit = null; try { hit = rc.intersectObject(remotePlayer.mesh, true)[0]; } catch (err) {}
       if (hit) {
         burst(hit.point, w.color, 6);
         if (botMode) applyKnockback(remotePlayer, w.damage, w.knockback, d);
