@@ -76,7 +76,7 @@ input[type=range]{accent-color:#22d3ee}
   <div class="glass p-8 rounded-3xl max-w-md w-full shadow-2xl text-slate-100 text-center">
     <svg viewBox="0 0 64 64" width="84" height="84" class="mx-auto mb-1"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#67e8f9"/><stop offset="1" stop-color="#fb7185"/></linearGradient></defs><circle cx="32" cy="32" r="29" fill="#0f172a" stroke="url(#lg)" stroke-width="4"/><circle cx="17" cy="32" r="3" fill="#67e8f9"/><path d="M23 40h14v9l19-17-19-17v9H23z" fill="url(#lg)"/></svg>
     <h1 class="text-4xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-rose-400 mb-1">KNOCKBACK PVP</h1>
-    <p class="text-slate-400 text-sm mb-5">Launch your opponent off the map. <span class="text-slate-600 text-[10px]">build 6</span></p>
+    <p class="text-slate-400 text-sm mb-5">Launch your opponent off the map. <span class="text-slate-600 text-[10px]">build 7</span></p>
     <div class="flex gap-2 mb-4">
       <input id="nameInput" maxlength="16" placeholder="Your name" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-100 focus:outline-none focus:border-cyan-400">
       <select id="mapSelect" class="bg-slate-900 border border-slate-700 rounded-xl px-3 text-xs font-semibold text-slate-200"><option value="0">Neon Island</option><option value="1">Skyline Rooftop</option><option value="2">Frozen Ring</option></select>
@@ -132,6 +132,8 @@ input[type=range]{accent-color:#22d3ee}
 </div>
 <div id="scoreboard" class="absolute inset-0 hidden pointer-events-none flex items-center justify-center z-30"><div class="glass rounded-2xl p-4 w-80"><div class="text-xs text-slate-400 mb-2">Leaderboard</div><div id="sbRows"></div></div></div>
 
+<div id="dbg" class="absolute bottom-2 left-2 text-[10px] text-slate-400 pointer-events-none z-20 font-mono"></div>
+
 <script>
 // ---------- STATE ----------
 let conn = null;
@@ -152,7 +154,8 @@ const WEAPONS = {
   2: { fireRate: 650, damage: 4, knockback: 7, range: 100, spread: 0.12, count: 6, color: 0xfb7185 },
   3: { fireRate: 900, damage: 22, knockback: 32, range: 200, spread: 0, color: 0xfbbf24 }
 };
-let lastShot = 0;
+let lastShot = 0, dbgShots = 0, dbgErr = '';
+addEventListener('error', e => { dbgErr = e.message; });
 const $ = id => document.getElementById(id);
 const canvas = $('gameCanvas'), menuOverlay = $('menuOverlay'), pauseOverlay = $('pauseOverlay'), crosshair = $('crosshair');
 const settingsControls = $('settingsControls');
@@ -381,7 +384,7 @@ function updateLocal(dt) {
   if (keys.a) { mx -= s.x; mz -= s.z; } if (keys.d) { mx += s.x; mz += s.z; }
   const l = Math.hypot(mx, mz) || 1; mx = mx / l * (mx || mz ? 1 : 0); mz = mz / l * (mx || mz ? 1 : 0);
   stepBody(localPlayer, dt, mx, mz);
-  if (mouseDown) fireWeapon();
+  if (mouseDown) { try { fireWeapon(); } catch (err) { dbgErr = err.message; } }
 
   if (localPlayer.y < -25) {
     respawn(localPlayer, 12); remotePlayer.score++;
@@ -450,7 +453,7 @@ function burst(pos, color, n) {
 function fireWeapon() {
   const now = performance.now(), w = WEAPONS[localPlayer.weapon];
   if (now - lastShot < w.fireRate) return;
-  lastShot = now;
+  lastShot = now; dbgShots++;
   const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
   const origin = new THREE.Vector3(localPlayer.x, localPlayer.y + 0.8, localPlayer.z);
   for (let i = 0; i < (w.count || 1); i++) {
@@ -483,7 +486,7 @@ function setupInput() {
     localPlayer.yaw -= e.movementX * userSettings.sensitivity;
     localPlayer.pitch = Math.max(-1.4, Math.min(1.4, localPlayer.pitch - e.movementY * userSettings.sensitivity));
   });
-  document.addEventListener('mousedown', e => { if (e.button === 0 && inputActive()) mouseDown = true; });
+  document.addEventListener('mousedown', e => { if (e.button === 0 && inputActive()) { mouseDown = true; try { fireWeapon(); } catch (err) { dbgErr = err.message; } } });
   document.addEventListener('mouseup', e => { if (e.button === 0) mouseDown = false; });
   addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyW') e.preventDefault();
@@ -799,6 +802,7 @@ function animate() {
   const a = Math.round(localPlayer.percent), b = Math.round(remotePlayer.percent);
   if (a !== shown[0]) { shown[0] = a; $('hudP1Percent').textContent = a + '%'; }
   if (b !== shown[1]) { shown[1] = b; $('hudP2Percent').textContent = b + '%'; }
+  $('dbg').textContent = 'build 7 | lock:' + (isPointerLocked ? 'yes' : 'no') + ' | shots:' + dbgShots + (dbgErr ? ' | error: ' + dbgErr : '');
   renderer.render(scene, camera);
 }
 
