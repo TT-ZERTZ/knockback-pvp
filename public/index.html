@@ -24,6 +24,7 @@ input[type=range]{accent-color:#22d3ee}
     <div class="text-3xl font-black text-cyan-300" id="hudP1Percent">0%</div>
     <div class="text-xs text-slate-300 mt-1">KOs: <span id="hudP1Score" class="font-bold text-white">0</span></div>
     <div class="w-full bg-slate-700/70 h-1.5 rounded-full overflow-hidden mt-2"><div id="hudP1DashBar" class="bg-cyan-300 h-full w-full"></div></div>
+    <div id="boostPips" class="flex items-center gap-1 mt-2"></div>
   </div>
   <div class="glass px-6 py-2 rounded-2xl text-center">
     <div class="text-xs text-slate-400">Room</div>
@@ -76,7 +77,7 @@ input[type=range]{accent-color:#22d3ee}
   <div class="glass p-8 rounded-3xl max-w-md w-full shadow-2xl text-slate-100 text-center">
     <svg viewBox="0 0 64 64" width="84" height="84" class="mx-auto mb-1"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#67e8f9"/><stop offset="1" stop-color="#fb7185"/></linearGradient></defs><circle cx="32" cy="32" r="29" fill="#0f172a" stroke="url(#lg)" stroke-width="4"/><circle cx="17" cy="32" r="3" fill="#67e8f9"/><path d="M23 40h14v9l19-17-19-17v9H23z" fill="url(#lg)"/></svg>
     <h1 class="text-4xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-rose-400 mb-1">KNOCKBACK PVP</h1>
-    <p class="text-slate-400 text-sm mb-5">Launch your opponent off the map. <span class="text-slate-600 text-[10px]">build 8</span></p>
+    <p class="text-slate-400 text-sm mb-5">Launch your opponent off the map. <span class="text-slate-600 text-[10px]">build 9</span></p>
     <div class="flex gap-2 mb-4">
       <input id="nameInput" maxlength="16" placeholder="Your name" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-100 focus:outline-none focus:border-cyan-400">
       <select id="mapSelect" class="bg-slate-900 border border-slate-700 rounded-xl px-3 text-xs font-semibold text-slate-200"><option value="0">Neon Island</option><option value="1">Skyline Rooftop</option><option value="2">Frozen Ring</option></select>
@@ -106,7 +107,7 @@ input[type=range]{accent-color:#22d3ee}
     <div class="mt-5 pt-4 border-t border-slate-800 text-left text-xs text-slate-400 grid grid-cols-2 gap-x-2 gap-y-1">
       <div><span class="text-cyan-300">WASD</span> move</div><div><span class="text-cyan-300">Space</span> jump / double jump</div>
       <div><span class="text-cyan-300">Shift</span> dash</div><div><span class="text-cyan-300">Click</span> attack (hold)</div>
-      <div><span class="text-cyan-300">1 / 2 / 3</span> weapons</div><div><span class="text-cyan-300">Esc</span> settings</div>
+      <div><span class="text-cyan-300">1 / 2 / 3</span> weapons</div><div><span class="text-cyan-300">Esc</span> settings</div><div class="col-span-2"><span class="text-amber-300">Q</span> boost: each KO gives +1, four stack into a GOLD boost</div>
     </div>
   </div>
 </div>
@@ -143,7 +144,7 @@ const inputActive = () => isPointerLocked || (noLock && pauseOverlay.classList.c
 const userSettings = { sensitivity: 0.0022, fov: 75, crosshairStyle: 'cross', crosshairColor: '#ffffff', crosshairSize: 12, botLevel: 2 };
 
 const mkBody = (z, extra) => Object.assign({ x: 0, y: 3, z, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, percent: 0, score: 0, canDoubleJump: true, isGrounded: false, mesh: null }, extra);
-const localPlayer = mkBody(12, { dashCooldown: 0, weapon: 1 });
+const localPlayer = mkBody(12, { dashCooldown: 0, weapon: 1, boosts: 0 });
 const remotePlayer = mkBody(-12, { connected: false });
 const keys = { w: false, a: false, s: false, d: false };
 
@@ -233,12 +234,74 @@ function initThree() {
 }
 
 const MAPS = [
-  { name: 'Neon Island', shape: 'round', R: 18, sky: [[0, '#0b1230'], [0.55, '#3b2a6b'], [1, '#e0709a']], fog: 0x4a3478, top: '#1c2b4a', acc: '#67e8f9', rock: 0x3b3558, scenery: 'rocks' },
-  { name: 'Skyline Rooftop', shape: 'square', R: 16, sky: [[0, '#06101f'], [0.6, '#1c3b5a'], [1, '#f5a15a']], fog: 0x2b4a68, top: '#2b3445', acc: '#fbbf24', rock: 0x2a3140, scenery: 'city' },
-  { name: 'Frozen Ring', shape: 'round', R: 15, sky: [[0, '#071a2e'], [0.6, '#2b6a8f'], [1, '#d6f1ff']], fog: 0x6aa6c4, top: '#bcd9e8', acc: '#38bdf8', rock: 0x7aa3b8, scenery: 'rocks' }
+  { name: 'Neon Island', shape: 'round', R: 18, sky: [[0, '#0b1230'], [0.55, '#3b2a6b'], [1, '#e0709a']], fog: 0x4a3478, top: '#1c2b4a', acc: '#67e8f9', rock: 0x3b3558, solid: 0x4b4f8a, scenery: 'rocks', posts: true, obs: [
+    { t: 'b', x: 0, z: 0, hw: 2.2, hd: 2.2, h: 4.5 },
+    { t: 'b', x: 7, z: 7, hw: 3, hd: 0.6, h: 2.2 }, { t: 'b', x: -7, z: 7, hw: 0.6, hd: 3, h: 2.2 },
+    { t: 'b', x: -7, z: -7, hw: 3, hd: 0.6, h: 2.2 }, { t: 'b', x: 7, z: -7, hw: 0.6, hd: 3, h: 2.2 }] },
+  { name: 'Skyline Rooftop', shape: 'square', R: 16, sky: [[0, '#06101f'], [0.6, '#1c3b5a'], [1, '#f5a15a']], fog: 0x2b4a68, top: '#2b3445', acc: '#fbbf24', rock: 0x2a3140, solid: 0x4a5568, scenery: 'city', obs: [
+    { t: 'b', x: -8, z: -6, hw: 3.5, hd: 3, h: 5, win: true }, { t: 'b', x: 9, z: 7, hw: 3, hd: 3.5, h: 4, win: true },
+    { t: 'b', x: 5, z: -6, hw: 1.2, hd: 1.2, h: 1.6 }, { t: 'b', x: -5, z: 6, hw: 1.2, hd: 1.2, h: 1.6 },
+    { t: 'b', x: 0, z: 0, hw: 0.5, hd: 4, h: 2.6 },
+    { t: 'b', x: 0, z: 15.7, hw: 16, hd: 0.3, h: 1.3, rim: true, bounce: 0.6 }, { t: 'b', x: 0, z: -15.7, hw: 16, hd: 0.3, h: 1.3, rim: true, bounce: 0.6 },
+    { t: 'b', x: 15.7, z: 0, hw: 0.3, hd: 16, h: 1.3, rim: true, bounce: 0.6 }, { t: 'b', x: -15.7, z: 0, hw: 0.3, hd: 16, h: 1.3, rim: true, bounce: 0.6 }] },
+  { name: 'Frozen Ring', shape: 'round', R: 15, sky: [[0, '#071a2e'], [0.6, '#2b6a8f'], [1, '#d6f1ff']], fog: 0x6aa6c4, top: '#bcd9e8', acc: '#38bdf8', rock: 0x7aa3b8, solid: 0x9ec9dd, scenery: 'rocks', posts: true, obs: [
+    { t: 'c', x: 6, z: 6, r: 1.2, h: 3.5 }, { t: 'c', x: -6, z: 6, r: 1.2, h: 3.5 }, { t: 'c', x: 6, z: -6, r: 1.2, h: 3.5 }, { t: 'c', x: -6, z: -6, r: 1.2, h: 3.5 },
+    { t: 'c', x: 0, z: 0, r: 2.6, h: 1.8 }] }
 ];
+let obstacles = [];
 let arena = null, curMap = -1;
 const onPlat = (x, z) => { const m = MAPS[curMap]; return m.shape === 'round' ? Math.hypot(x, z) <= m.R : Math.max(Math.abs(x), Math.abs(z)) <= m.R; };
+function collide(b) {
+  if (b.y < -0.5) return;
+  const r = 0.45, feet = b.y - 0.9;
+  for (const o of obstacles) {
+    let nx, nz, pen;
+    if (o.t === 'c') {
+      const dx = b.x - o.x, dz = b.z - o.z, d = Math.hypot(dx, dz) || 1e-6;
+      pen = o.r + r - d; if (pen <= 0) continue; nx = dx / d; nz = dz / d;
+    } else {
+      const cx = Math.max(o.x - o.hw, Math.min(b.x, o.x + o.hw)), cz = Math.max(o.z - o.hd, Math.min(b.z, o.z + o.hd));
+      const dx = b.x - cx, dz = b.z - cz, d = Math.hypot(dx, dz);
+      if (d > 0) { pen = r - d; if (pen <= 0) continue; nx = dx / d; nz = dz / d; }
+      else {
+        const px = o.hw - Math.abs(b.x - o.x), pz = o.hd - Math.abs(b.z - o.z);
+        if (px < pz) { nx = Math.sign(b.x - o.x) || 1; nz = 0; pen = px + r; } else { nx = 0; nz = Math.sign(b.z - o.z) || 1; pen = pz + r; }
+      }
+    }
+    if (feet >= o.h - 0.3) { // at or above the top: stand on it
+      if (b.vy <= 0 && feet <= o.h + 0.6) { b.y = o.h + 0.9; b.vy = 0; b.isGrounded = true; b.canDoubleJump = true; }
+      continue;
+    }
+    b.x += nx * pen; b.z += nz * pen; // push out of the side
+    const vn = b.vx * nx + b.vz * nz;
+    if (vn < 0) { const k = 1 + (o.bounce || 0.35); b.vx -= k * vn * nx; b.vz -= k * vn * nz; }
+  }
+}
+// distance along a ray to the first obstacle (so walls block bullets)
+function rayBlock(o, d, maxT) {
+  let best = maxT;
+  for (const ob of obstacles) {
+    let t = Infinity;
+    if (ob.t === 'c') {
+      const fx = o.x - ob.x, fz = o.z - ob.z, a = d.x * d.x + d.z * d.z;
+      if (a < 1e-6) continue;
+      const bq = fx * d.x + fz * d.z, disc = bq * bq - a * (fx * fx + fz * fz - ob.r * ob.r);
+      if (disc < 0) continue;
+      t = (-bq - Math.sqrt(disc)) / a;
+      const y = o.y + d.y * t; if (t < 0 || y < 0 || y > ob.h) t = Infinity;
+    } else {
+      let t0 = 0, t1 = Infinity;
+      for (const [p, dv, lo, hi] of [[o.x, d.x, ob.x - ob.hw, ob.x + ob.hw], [o.y, d.y, 0, ob.h], [o.z, d.z, ob.z - ob.hd, ob.z + ob.hd]]) {
+        if (Math.abs(dv) < 1e-8) { if (p < lo || p > hi) { t0 = Infinity; break; } continue; }
+        let u = (lo - p) / dv, v = (hi - p) / dv; if (u > v) { const w = u; u = v; v = w; }
+        t0 = Math.max(t0, u); t1 = Math.min(t1, v); if (t0 > t1) { t0 = Infinity; break; }
+      }
+      t = t0;
+    }
+    if (t >= 0 && t < best) best = t;
+  }
+  return best;
+}
 const platNorm = (x, z) => { const m = MAPS[curMap]; return (m.shape === 'round' ? Math.hypot(x, z) : Math.max(Math.abs(x), Math.abs(z))) / m.R; };
 
 function buildArena(i) {
@@ -279,6 +342,28 @@ function buildArena(i) {
     ring.rotation.x = Math.PI / 2; ring.position.y = 0.25;
     g.add(base, ring); g.position.set(fx * R, 0.2, fz * R); g.userData.glow = ring;
     arena.add(g); bouncePads.push(g);
+  });
+
+  obstacles = m.obs.map(o => ({ ...o }));
+  if (m.posts) {
+    const cnt = Math.floor(2 * Math.PI * (R - 0.7) / 2.3);
+    for (let n = 0; n < cnt; n++) { const a = n / cnt * Math.PI * 2; obstacles.push({ t: 'c', x: Math.cos(a) * (R - 0.7), z: Math.sin(a) * (R - 0.7), r: 0.45, h: 1.5, rim: true, bounce: 0.6 }); }
+  }
+  const solid = new THREE.MeshStandardMaterial({ color: m.solid, roughness: 0.7 });
+  const postMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.5 });
+  const wt0 = m.scenery === 'city' ? windowTexture() : null;
+  obstacles.forEach(o => {
+    let mat = o.rim ? postMat : solid;
+    if (o.win) {
+      const t = wt0.clone(); t.needsUpdate = true; t.repeat.set(Math.ceil(o.hw * 2 / 3), Math.ceil(o.h / 2));
+      mat = new THREE.MeshStandardMaterial({ color: 0x2a3550, map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.6, roughness: 0.8 });
+    }
+    const mesh = new THREE.Mesh(o.t === 'c' ? new THREE.CylinderGeometry(o.r, o.r, o.h, 20) : new THREE.BoxGeometry(o.hw * 2, o.h, o.hd * 2), mat);
+    mesh.position.set(o.x, o.h / 2, o.z); mesh.castShadow = mesh.receiveShadow = true; arena.add(mesh);
+    if (o.rim) {
+      const cap = o.t === 'c' ? new THREE.Mesh(new THREE.SphereGeometry(o.r * 0.8, 12, 8), glow) : new THREE.Mesh(new THREE.BoxGeometry(o.hw * 2 + 0.05, 0.12, o.hd * 2 + 0.05), glow);
+      cap.position.set(o.x, o.h + (o.t === 'c' ? 0.1 : 0.06), o.z); arena.add(cap);
+    }
   });
 
   if (m.scenery === 'city') {
@@ -364,6 +449,7 @@ function stepBody(b, dt, mx, mz) {
   bouncePads.forEach(p => {
     if (Math.hypot(b.x - p.position.x, b.z - p.position.z) < 2.2 && Math.abs(b.y - 0.9) < 0.8) { b.vy = 26; b.isGrounded = false; }
   });
+  collide(b);
 }
 function applyKnockback(b, damage, kb, d) {
   b.percent += damage;
@@ -387,7 +473,7 @@ function updateLocal(dt) {
   if (mouseDown) { try { fireWeapon(); } catch (err) { dbgErr = err.message; } }
 
   if (localPlayer.y < -25) {
-    respawn(localPlayer, 12); remotePlayer.score++;
+    respawn(localPlayer, 12); remotePlayer.score++; localPlayer.boosts = 0; updateBoostHud();
     $('hudP2Score').textContent = remotePlayer.score;
     if (conn && conn.open) conn.send({ type: 'KO' });
   }
@@ -420,11 +506,12 @@ function updateBot(dt) {
     const aim = new THREE.Vector3(dx, localPlayer.y - b.y, dz).normalize();
     aim.x += (Math.random() - .5) * 0.08; aim.y += (Math.random() - .5) * 0.08; aim.z += (Math.random() - .5) * 0.08; aim.normalize();
     const start = new THREE.Vector3(b.x, b.y + 0.5, b.z);
-    tracer(start, aim, 60, 0xfb7185);
-    if (Math.random() < 0.2 + lvl * 0.15) applyKnockback(localPlayer, 4 + lvl, 6 + lvl * 2, aim);
+    const dist3 = Math.hypot(dx, localPlayer.y - b.y, dz), wall = rayBlock(start, aim, 60);
+    tracer(start, aim, Math.min(60, wall), 0xfb7185);
+    if (wall > dist3 && Math.random() < 0.2 + lvl * 0.15) applyKnockback(localPlayer, 4 + lvl, 6 + lvl * 2, aim);
   }
   if (b.y < -25) {
-    respawn(b, -12); localPlayer.score++;
+    respawn(b, -12); localPlayer.score++; grantBoost();
     $('hudP1Score').textContent = localPlayer.score;
   }
 }
@@ -459,12 +546,13 @@ function fireWeapon() {
   for (let i = 0; i < (w.count || 1); i++) {
     const d = dir.clone();
     if (w.spread) { d.x += (Math.random() - .5) * w.spread; d.y += (Math.random() - .5) * w.spread; d.z += (Math.random() - .5) * w.spread; d.normalize(); }
+    const wall = rayBlock(origin, d, w.range);
     if (remotePlayer.connected) {
       // plain ray-vs-sphere test around the opponent (no THREE.Raycaster, so nothing can crash here)
       const target = new THREE.Vector3(remotePlayer.x, remotePlayer.y, remotePlayer.z);
       const along = target.clone().sub(origin).dot(d);
       let hit = null;
-      if (along > 0.1 && along < w.range) {
+      if (along > 0.1 && along < Math.min(w.range, wall)) {
         const closest = origin.clone().addScaledVector(d, along);
         if (closest.distanceTo(target) < 1.0) hit = { point: closest };
       }
@@ -475,8 +563,8 @@ function fireWeapon() {
       }
     }
     const start = origin.clone().add(new THREE.Vector3(0, -0.3, 0));
-    tracer(start, d, w.range, w.color);
-    if (conn && conn.open) conn.send({ type: 'TRACER', sx: start.x, sy: start.y, sz: start.z, dx: d.x, dy: d.y, dz: d.z, range: w.range, color: w.color });
+    tracer(start, d, Math.min(w.range, wall), w.color);
+    if (conn && conn.open) conn.send({ type: 'TRACER', sx: start.x, sy: start.y, sz: start.z, dx: d.x, dy: d.y, dz: d.z, range: Math.min(w.range, wall), color: w.color });
   }
   gunKick = 0.12;
 }
@@ -500,6 +588,7 @@ function setupInput() {
     if (e.code === 'KeyS') keys.s = true; if (e.code === 'KeyD') keys.d = true;
     if (e.code === 'Space' && !e.repeat && inputActive()) jump();
     if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !e.repeat && inputActive()) dash();
+    if (e.code === 'KeyQ' && !e.repeat && inputActive()) useBoost();
     const typing = /INPUT|SELECT/.test(document.activeElement.tagName);
     if (e.code === 'Backslash' && myAdmin && !typing) { e.preventDefault(); toggleAdmin(); }
     if (e.code === 'Tab' && !typing) { e.preventDefault(); showSb(true); }
@@ -533,6 +622,21 @@ function dash() {
   if (keys.w) d.add(f); if (keys.s) d.sub(f); if (keys.a) d.sub(s); if (keys.d) d.add(s);
   if (!d.lengthSq()) d.copy(f);
   d.normalize(); p.vx += d.x * 24; p.vz += d.z * 24;
+}
+
+// ---------- BOOSTS: every KO gives +1 (max 4); 4 stacked = GOLD boost, 4x the height ----------
+function grantBoost() { localPlayer.boosts = Math.min(4, localPlayer.boosts + 1); updateBoostHud(); }
+function useBoost() {
+  const p = localPlayer; if (!p.boosts) return;
+  const gold = p.boosts >= 4;
+  p.vy = gold ? 36 : 18; p.boosts = gold ? 0 : p.boosts - 1; p.isGrounded = false;
+  burst(new THREE.Vector3(p.x, p.y - 0.8, p.z), gold ? 0xfbbf24 : 0x67e8f9, gold ? 30 : 10);
+  updateBoostHud();
+}
+function updateBoostHud() {
+  const n = localPlayer.boosts, gold = n >= 4;
+  $('boostPips').innerHTML = [0, 1, 2, 3].map(i => `<div class="h-2 flex-1 rounded-full ${i < n ? (gold ? 'bg-amber-300' : 'bg-cyan-300') : 'bg-slate-700'}"></div>`).join('')
+    + `<span class="text-[10px] font-bold ml-1 whitespace-nowrap ${gold ? 'text-amber-300' : 'text-slate-400'}">${gold ? 'GOLD [Q]' : n ? 'BOOST [Q]' : ''}</span>`;
 }
 
 // ---------- POINTER LOCK / PAUSE / SETTINGS ----------
@@ -693,13 +797,13 @@ function onNet(d) {
   if (d.type === 'SYNC') Object.assign(remotePlayer, { x: d.x, y: d.y, z: d.z, yaw: d.yaw, pitch: d.pitch, percent: d.percent });
   else if (d.type === 'TRACER') tracer(new THREE.Vector3(d.sx, d.sy, d.sz), new THREE.Vector3(d.dx, d.dy, d.dz), d.range, d.color);
   else if (d.type === 'HIT') applyKnockback(localPlayer, d.damage, d.knockback, { x: d.dirX, y: d.dirY, z: d.dirZ });
-  else if (d.type === 'KO') { localPlayer.score++; $('hudP1Score').textContent = localPlayer.score; }
+  else if (d.type === 'KO') { localPlayer.score++; grantBoost(); $('hudP1Score').textContent = localPlayer.score; }
 }
 function startOnline(m) {
   conn = { open: true, send: o => send({ t: 'relay', d: o }) };
   botMode = false; oppName = m.opp.name; oppAdmin = m.opp.admin;
   buildArena(m.map);
-  localPlayer.score = remotePlayer.score = 0; $('hudP1Score').textContent = $('hudP2Score').textContent = '0';
+  localPlayer.score = remotePlayer.score = 0; localPlayer.boosts = 0; updateBoostHud(); $('hudP1Score').textContent = $('hudP2Score').textContent = '0';
   respawn(localPlayer, m.role === 'a' ? 12 : -12); remotePlayer.percent = 0; remotePlayer.connected = true;
   if (!isGameActive) startGame();
   $('hudRoomCode').textContent = m.code; $('p2StatusText').textContent = 'Online'; $('hudRoleTag').textContent = 'Press Esc for settings';
@@ -739,7 +843,7 @@ function leaveGame() {
   if (document.pointerLockElement) document.exitPointerLock();
   send({ t: 'leave' }); findUI(false);
   respawn(localPlayer, 12); respawn(remotePlayer, -12);
-  localPlayer.score = remotePlayer.score = 0; remotePlayer.connected = false;
+  localPlayer.score = remotePlayer.score = 0; remotePlayer.connected = false; localPlayer.boosts = 0; updateBoostHud();
   $('hudP1Score').textContent = '0'; $('hudP2Score').textContent = '0'; $('hudRoomCode').textContent = 'SOLO';
   pauseOverlay.classList.add('hidden');
   ['hud', 'weaponHud', 'crosshair'].forEach(id => $(id).classList.add('hidden'));
@@ -808,7 +912,7 @@ function animate() {
   const a = Math.round(localPlayer.percent), b = Math.round(remotePlayer.percent);
   if (a !== shown[0]) { shown[0] = a; $('hudP1Percent').textContent = a + '%'; }
   if (b !== shown[1]) { shown[1] = b; $('hudP2Percent').textContent = b + '%'; }
-  $('dbg').textContent = 'build 8 | lock:' + (isPointerLocked ? 'yes' : 'no') + ' | shots:' + dbgShots + (dbgErr ? ' | error: ' + dbgErr : '');
+  $('dbg').textContent = 'build 9 | lock:' + (isPointerLocked ? 'yes' : 'no') + ' | shots:' + dbgShots + (dbgErr ? ' | error: ' + dbgErr : '');
   renderer.render(scene, camera);
 }
 
@@ -829,7 +933,7 @@ function boot() {
   loadThree([
     'https://cdn.jsdelivr.net/npm/three@0.136.0/build/three.min.js',
     'https://unpkg.com/three@0.136.0/build/three.min.js'
-  ], () => { initThree(); setupInput(); setupSettings(); setupTabs(); refreshNames(); startTick(); animate(); if (store.get('kb_dev')) connectWS(); });
+  ], () => { initThree(); setupInput(); setupSettings(); setupTabs(); refreshNames(); updateBoostHud(); startTick(); animate(); if (store.get('kb_dev')) connectWS(); });
 }
 if (document.readyState === 'loading') addEventListener('DOMContentLoaded', boot); else boot();
 </script>
