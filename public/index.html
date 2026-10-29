@@ -18,6 +18,14 @@ input[type=range]{accent-color:#22d3ee}
 <body class="w-screen h-screen relative">
 <canvas id="gameCanvas" class="w-full h-full block"></canvas>
 <div id="crosshair" class="hidden"></div>
+<div id="changelog" class="hidden" style="position:fixed;inset:0;z-index:100;background:rgba(2,6,23,.6);display:flex;align-items:center;justify-content:center;padding:16px">
+  <div class="glass rounded-3xl text-slate-100 shadow-2xl relative w-full max-w-md" style="max-height:80vh;display:flex;flex-direction:column">
+    <button id="clClose" type="button" aria-label="Close" class="absolute top-3 right-4 text-slate-400 hover:text-white text-2xl font-bold leading-none">&times;</button>
+    <div class="px-7 pt-6 pb-3"><div class="text-xl font-black text-cyan-300">Change Log</div><div id="clVersion" class="text-xs text-slate-400"></div></div>
+    <div id="clBody" class="px-7 pb-6 overflow-y-auto text-sm leading-relaxed" style="min-height:0"></div>
+  </div>
+</div>
+<button id="clOpen" type="button" class="glass text-[11px] font-bold text-cyan-300 hover:text-white rounded-lg px-3 py-1.5" style="position:fixed;left:12px;bottom:12px;z-index:60">Change Log</button>
 <div id="scope" class="hidden" style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at center,transparent 0,transparent 36vmin,rgba(0,0,0,.55) 36.1vmin,#000 40vmin)">
   <div style="position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(0,0,0,.85)"></div>
   <div style="position:absolute;top:0;bottom:0;left:50%;width:1px;background:rgba(0,0,0,.85)"></div>
@@ -710,6 +718,26 @@ function setupInput() {
   });
   switchWeapon(1);
 }
+const CHANGELOG = { version: '1.1', sections: [
+  { title: 'Change Log', items: ['+ added sniper', '+ added keybind changing', '+ added Ads Sensitivity', '+ added sniper scope'] },
+  { title: 'Weapon Changes', items: ['+ Rocket now gives you slight knockback when shooting', '+ removed bloom on Rifle', '+ Sniper shoots in a random direction when not scoped', '+ weapon bar follows your keybinds'] }
+] };
+function setupChangelog() {
+  const box = $('changelog'), body = $('clBody');
+  $('clVersion').textContent = 'Version ' + CHANGELOG.version;
+  CHANGELOG.sections.forEach((sec, i) => {
+    if (i) { const hr = document.createElement('div'); hr.style.cssText = 'border-top:1px solid rgba(255,255,255,.18);margin:14px 0'; body.appendChild(hr); }
+    if (i) { const h = document.createElement('div'); h.className = 'font-bold text-white mb-2'; h.textContent = sec.title; body.appendChild(h); }
+    sec.items.forEach(t => { const r = document.createElement('div'); r.className = 'mb-2 ' + (t[0] === '+' ? 'text-emerald-300' : t[0] === '-' ? 'text-rose-300' : 'text-slate-200'); r.textContent = t; body.appendChild(r); });
+  });
+  const close = () => { box.classList.add('hidden'); try { localStorage.setItem('knockbackSeenVersion', CHANGELOG.version); } catch (e) {} };
+  $('clClose').addEventListener('click', close);
+  box.addEventListener('mousedown', e => { if (e.target === box) close(); });
+  $('clOpen').addEventListener('click', () => box.classList.remove('hidden'));
+  addEventListener('keydown', e => { if (e.code === 'Escape' && !box.classList.contains('hidden')) { e.stopImmediatePropagation(); close(); } }, true);
+  let seen = null; try { seen = localStorage.getItem('knockbackSeenVersion'); } catch (e) {}
+  if (seen !== CHANGELOG.version) box.classList.remove('hidden');
+}
 function renderWeaponHud() {
   const order = n => { const m = /^Digit(\d)$/.exec(binds['weapon' + n] || ''); return m ? (+m[1] || 10) : 100 + n; };
   const hud = $('weaponHud');
@@ -791,7 +819,7 @@ function startGame() {
   }
   refreshNames();
   menuOverlay.classList.add('hidden');
-  ['hud', 'weaponHud', 'crosshair', 'chatBox'].forEach(id => $(id).classList.remove('hidden'));
+  ['hud', 'weaponHud', 'crosshair', 'chatBox'].forEach(id => $(id).classList.remove('hidden')); $('clOpen').classList.add('hidden');
 }
 function requestLock() {
   const wait = 1300 - (performance.now() - lastLockExit);
@@ -1026,7 +1054,7 @@ function leaveGame() {
   localPlayer.score = remotePlayer.score = 0; remotePlayer.connected = false; localPlayer.boosts = 0; updateBoostHud();
   $('hudP1Score').textContent = '0'; $('hudP2Score').textContent = '0'; $('hudRoomCode').textContent = 'SOLO';
   pauseOverlay.classList.add('hidden');
-  ['hud', 'weaponHud', 'crosshair', 'chatBox', 'scope'].forEach(id => $(id).classList.add('hidden'));
+  ['hud', 'weaponHud', 'crosshair', 'chatBox', 'scope'].forEach(id => $(id).classList.add('hidden')); $('clOpen').classList.remove('hidden');
   menuOverlay.classList.remove('hidden');
   setStatus(''); setTab('solo');
 }
@@ -1118,7 +1146,7 @@ function boot() {
   loadThree([
     'https://cdn.jsdelivr.net/npm/three@0.136.0/build/three.min.js',
     'https://unpkg.com/three@0.136.0/build/three.min.js'
-  ], () => { initThree(); setupInput(); setupSettings(); setupTabs(); refreshNames(); updateBoostHud(); startTick(); animate(); if (store.get('kb_dev')) connectWS(); });
+  ], () => { initThree(); setupInput(); setupSettings(); setupChangelog(); setupTabs(); refreshNames(); updateBoostHud(); startTick(); animate(); if (store.get('kb_dev')) connectWS(); });
 }
 if (document.readyState === 'loading') addEventListener('DOMContentLoaded', boot); else boot();
 </script>
