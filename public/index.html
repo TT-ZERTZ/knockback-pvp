@@ -44,6 +44,7 @@ input[type=range]{accent-color:#22d3ee}
   <div id="wpn1" class="glass px-4 py-2 rounded-xl text-center"><div class="text-xs text-slate-400">1</div><div class="text-sm font-bold text-white">Rifle</div></div>
   <div id="wpn2" class="glass px-4 py-2 rounded-xl text-center"><div class="text-xs text-slate-400">2</div><div class="text-sm font-bold text-white">Shotgun</div></div>
   <div id="wpn3" class="glass px-4 py-2 rounded-xl text-center"><div class="text-xs text-slate-400">3</div><div class="text-sm font-bold text-white">Rocket</div></div>
+  <div id="wpn4" class="glass px-4 py-2 rounded-xl text-center"><div class="text-xs text-slate-400">4</div><div class="text-sm font-bold text-white">Sniper</div></div>
 </div>
 
 <!-- Settings panel: moved between the menu and the pause screen -->
@@ -108,7 +109,7 @@ input[type=range]{accent-color:#22d3ee}
     <div class="mt-5 pt-4 border-t border-slate-800 text-left text-xs text-slate-400 grid grid-cols-2 gap-x-2 gap-y-1">
       <div><span class="text-cyan-300">WASD</span> move</div><div><span class="text-cyan-300">Space</span> jump / double jump</div>
       <div><span class="text-cyan-300">Shift</span> dash</div><div><span class="text-cyan-300">Click</span> attack (hold)</div>
-      <div><span class="text-cyan-300">1 / 2 / 3</span> weapons</div><div><span class="text-cyan-300">Esc</span> settings</div><div class="col-span-2"><span class="text-amber-300">Q</span> boost: each KO gives +1, four stack into a GOLD boost</div>
+      <div><span class="text-cyan-300">1 / 2 / 3 / 4</span> weapons (hold right-click to scope the sniper)</div><div><span class="text-cyan-300">Esc</span> settings</div><div class="col-span-2"><span class="text-amber-300">Q</span> boost: each KO gives +1, four stack into a GOLD boost</div>
     </div>
   </div>
 </div>
@@ -156,10 +157,12 @@ const keys = { w: false, a: false, s: false, d: false };
 let scene, camera, renderer, gun, gunKick = 0, time = 0;
 const bouncePads = [], floaters = [], particles = [];
 const WEAPONS = {
-  1: { fireRate: 150, damage: 7, knockback: 11, range: 150, spread: 0.02, color: 0x67e8f9 },
+  1: { fireRate: 150, damage: 7, knockback: 11, range: 150, spread: 0, color: 0x67e8f9 },
   2: { fireRate: 650, damage: 4, knockback: 7, range: 100, spread: 0.12, count: 6, color: 0xfb7185 },
-  3: { fireRate: 900, damage: 22, knockback: 32, range: 200, spread: 0, color: 0xfbbf24, rocket: true, speed: 48, radius: 5.5 }
+  3: { fireRate: 900, damage: 22, knockback: 32, range: 200, spread: 0, color: 0xfbbf24, rocket: true, speed: 48, radius: 5.5, recoil: 7 },
+  4: { fireRate: 1300, damage: 30, knockback: 60, range: 400, spread: 0, color: 0xa78bfa, sniper: true, zoomFov: 22, recoil: 14 }
 };
+let zooming = false, curFov = 75;
 let lastShot = 0, dbgShots = 0, dbgErr = '';
 addEventListener('error', e => { dbgErr = e.message; });
 const $ = id => document.getElementById(id);
@@ -427,6 +430,9 @@ function buildGunModel(i) {
   } else if (i === 2) { // shotgun
     cyl(.035, .035, .75, body, -.04, .03, -.38); cyl(.035, .035, .75, body, .04, .03, -.38); cyl(.055, .055, .28, wood, 0, -.02, -.3);
     box(.08, .14, .4, wood, 0, -.03, .2); box(.06, .16, .07, body, 0, -.13, .08); cyl(.05, .05, .04, accent, 0, .03, -.77);
+  } else if (i === 4) { // sniper
+    cyl(.03, .03, 1.1, body, 0, .03, -.55); cyl(.05, .05, .4, M(0x334155), 0, .02, -.1); box(.07, .13, .5, body, 0, -.03, .3);
+    box(.05, .12, .07, body, 0, -.12, .12); cyl(.04, .04, .3, M(0x0f172a), 0, .12, -.15); cyl(.045, .045, .03, accent, 0, .12, -.31); cyl(.045, .045, .06, accent, 0, .03, -1.12);
   } else { // rocket launcher
     cyl(.1, .1, .9, M(0x3f3f46), 0, .02, -.25); cyl(.14, .12, .16, body, 0, .02, -.75); cyl(.09, .09, .1, accent, 0, .02, -.84);
     box(.06, .16, .08, body, 0, -.12, 0); box(.04, .1, .12, body, 0, .14, -.2); cyl(.07, .1, .14, body, 0, .02, .22);
@@ -475,6 +481,11 @@ function updateLocal(dt) {
   if (keys.a) { mx -= s.x; mz -= s.z; } if (keys.d) { mx += s.x; mz += s.z; }
   const l = Math.hypot(mx, mz) || 1; mx = mx / l * (mx || mz ? 1 : 0); mz = mz / l * (mx || mz ? 1 : 0);
   stepBody(localPlayer, dt, mx, mz);
+  { const tf = (zooming && localPlayer.weapon === 4) ? WEAPONS[4].zoomFov : userSettings.fov;
+    if (localPlayer.weapon !== 4) zooming = false;
+    curFov += (tf - curFov) * Math.min(1, dt * 14);
+    if (Math.abs(camera.fov - curFov) > 0.01) { camera.fov = curFov; camera.updateProjectionMatrix(); }
+    if (gun) gun.visible = !(zooming && curFov < 40); }
   if (mouseDown) { try { fireWeapon(); } catch (err) { dbgErr = err.message; } }
 
   if (localPlayer.y < -25) {
@@ -606,11 +617,16 @@ function fireWeapon() {
     const sp = origin.clone().add(new THREE.Vector3(0, -0.3, 0)).addScaledVector(dir, 1);
     launchRocket(sp, dir, true);
     if (conn && conn.open) conn.send({ type: 'ROCKET', x: sp.x, y: sp.y, z: sp.z, dx: dir.x, dy: dir.y, dz: dir.z });
+    const rc = w.recoil; localPlayer.vx -= dir.x * rc; localPlayer.vz -= dir.z * rc; localPlayer.vy -= dir.y * rc; if (dir.y < -0.3) localPlayer.isGrounded = false;
     gunKick = 0.2; return;
+  }
+  if (w.sniper) { // lots of recoil; wild shot when not scoped
+    const rc = w.recoil; localPlayer.vx -= dir.x * rc; localPlayer.vz -= dir.z * rc; localPlayer.vy -= dir.y * rc * 0.6; if (dir.y < -0.3) localPlayer.isGrounded = false;
   }
   for (let i = 0; i < (w.count || 1); i++) {
     const d = dir.clone();
-    if (w.spread) { d.x += (Math.random() - .5) * w.spread; d.y += (Math.random() - .5) * w.spread; d.z += (Math.random() - .5) * w.spread; d.normalize(); }
+    if (w.sniper && !zooming) { d.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1); if (d.lengthSq() < 1e-4) d.set(0, 0, -1); d.normalize(); }
+    else if (w.spread) { d.x += (Math.random() - .5) * w.spread; d.y += (Math.random() - .5) * w.spread; d.z += (Math.random() - .5) * w.spread; d.normalize(); }
     const wall = rayBlock(origin, d, w.range);
     if (remotePlayer.connected) {
       // plain ray-vs-sphere test around the opponent (no THREE.Raycaster, so nothing can crash here)
@@ -631,7 +647,7 @@ function fireWeapon() {
     tracer(start, d, Math.min(w.range, wall), w.color);
     if (conn && conn.open) conn.send({ type: 'TRACER', sx: start.x, sy: start.y, sz: start.z, dx: d.x, dy: d.y, dz: d.z, range: Math.min(w.range, wall), color: w.color });
   }
-  gunKick = 0.12;
+  gunKick = w.sniper ? 0.3 : 0.12;
 }
 
 // ---------- INPUT ----------
@@ -642,11 +658,15 @@ function setupInput() {
   document.addEventListener('pointerlockerror', lockFailed);
   document.addEventListener('mousemove', e => {
     if (!inputActive()) return;
-    localPlayer.yaw -= e.movementX * userSettings.sensitivity;
-    localPlayer.pitch = Math.max(-1.4, Math.min(1.4, localPlayer.pitch - e.movementY * userSettings.sensitivity));
+    const zs = zooming ? 0.3 : 1;
+    localPlayer.yaw -= e.movementX * userSettings.sensitivity * zs;
+    localPlayer.pitch = Math.max(-1.4, Math.min(1.4, localPlayer.pitch - e.movementY * userSettings.sensitivity * zs));
   });
   document.addEventListener('mousedown', e => { if (e.button === 0 && inputActive() && !chatOpen) { mouseDown = true; try { fireWeapon(); } catch (err) { dbgErr = err.message; } } });
-  document.addEventListener('mouseup', e => { if (e.button === 0) mouseDown = false; });
+  document.addEventListener('mousedown', e => { if (e.button === 2 && inputActive() && !chatOpen && localPlayer.weapon === 4) zooming = true; });
+  document.addEventListener('mouseup', e => { if (e.button === 0) mouseDown = false; if (e.button === 2) zooming = false; });
+  document.addEventListener('contextmenu', e => { if (isGameActive) e.preventDefault(); });
+  addEventListener('blur', () => { zooming = false; });
   addEventListener('keydown', e => {
     if (!chatOpen && isGameActive && (e.code === 'Enter' || e.code === 'KeyT') && !/INPUT|SELECT/.test(document.activeElement.tagName) && pauseOverlay.classList.contains('hidden')) { e.preventDefault(); openChat(); return; }
     if (chatOpen) return;
@@ -659,7 +679,7 @@ function setupInput() {
     const typing = /INPUT|SELECT/.test(document.activeElement.tagName);
     if (e.code === 'Backslash' && myAdmin && !typing) { e.preventDefault(); toggleAdmin(); }
     if (e.code === 'Tab' && !typing) { e.preventDefault(); showSb(true); }
-    if (e.code === 'Digit1') switchWeapon(1); if (e.code === 'Digit2') switchWeapon(2); if (e.code === 'Digit3') switchWeapon(3);
+    if (e.code === 'Digit1') switchWeapon(1); if (e.code === 'Digit2') switchWeapon(2); if (e.code === 'Digit3') switchWeapon(3); if (e.code === 'Digit4') switchWeapon(4);
     // Esc normally exits pointer lock itself; this covers the case where the lock never started
     if (e.code === 'Escape' && isGameActive && !isPointerLocked) showPause();
   });
@@ -671,8 +691,8 @@ function setupInput() {
   switchWeapon(1);
 }
 function switchWeapon(i) {
-  localPlayer.weapon = i;
-  [1, 2, 3].forEach(n => $('wpn' + n).className = 'glass px-4 py-2 rounded-xl text-center ' + (n === i ? 'ring-2 ring-cyan-300' : 'opacity-60'));
+  localPlayer.weapon = i; zooming = false;
+  [1, 2, 3, 4].forEach(n => $('wpn' + n).className = 'glass px-4 py-2 rounded-xl text-center ' + (n === i ? 'ring-2 ring-cyan-300' : 'opacity-60'));
   if (gun) setGunModel(i);
 }
 function jump() {
@@ -731,7 +751,7 @@ function updateBoostHud() {
 
 // ---------- POINTER LOCK / PAUSE / SETTINGS ----------
 function mountSettings(slot) { $(slot).appendChild(settingsControls); settingsControls.classList.remove('hidden'); }
-function showPause() { pauseOverlay.classList.remove('hidden'); mountSettings('pauseSettingsSlot'); }
+function showPause() { zooming = false; pauseOverlay.classList.remove('hidden'); mountSettings('pauseSettingsSlot'); }
 
 function startGame() {
   isGameActive = true;
@@ -769,7 +789,7 @@ function onLockChange() {
 function setupSettings() {
   const bind = (id, fn) => $(id).addEventListener('input', e => fn(e.target.value));
   bind('sensSlider', v => { $('sensVal').textContent = (+v).toFixed(1); userSettings.sensitivity = v * 0.001; });
-  bind('fovSlider', v => { $('fovVal').textContent = v + '°'; userSettings.fov = +v; camera.fov = +v; camera.updateProjectionMatrix(); });
+  bind('fovSlider', v => { $('fovVal').textContent = v + '°'; userSettings.fov = +v; curFov = +v; camera.fov = +v; camera.updateProjectionMatrix(); });
   $('crosshairStyle').addEventListener('change', e => { userSettings.crosshairStyle = e.target.value; updateCrosshair(); });
   bind('crosshairColor', v => { userSettings.crosshairColor = v; updateCrosshair(); });
   bind('crosshairSize', v => { $('sizeVal').textContent = v + 'px'; userSettings.crosshairSize = +v; updateCrosshair(); });
