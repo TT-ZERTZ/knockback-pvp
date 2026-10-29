@@ -26,6 +26,11 @@ input[type=range]{accent-color:#22d3ee}
   </div>
 </div>
 <button id="clOpen" type="button" class="glass text-[11px] font-bold text-cyan-300 hover:text-white rounded-lg px-3 py-1.5" style="position:fixed;left:12px;bottom:12px;z-index:60">Change Log</button>
+<div id="devConsole" class="glass rounded-xl text-slate-100 font-mono text-xs" style="display:none;position:fixed;left:12px;top:12px;width:min(560px,calc(100vw - 24px));z-index:120">
+  <div id="dcOut" class="p-3 overflow-y-auto" style="height:220px;user-select:text"></div>
+  <div class="flex items-center" style="border-top:1px solid rgba(255,255,255,.12)"><span class="pl-3 text-cyan-300">&gt;</span><input id="dcIn" autocomplete="off" spellcheck="false" class="flex-1 bg-transparent outline-none px-2 py-2.5 text-slate-100"></div>
+</div>
+<div id="fpsBox" class="glass text-[11px] font-mono text-emerald-300 rounded-lg px-2 py-1" style="display:none;position:fixed;right:12px;bottom:12px;z-index:60">0 fps</div>
 <div id="scope" class="hidden" style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at center,transparent 0,transparent 36vmin,rgba(0,0,0,.55) 36.1vmin,#000 40vmin)">
   <div style="position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(0,0,0,.85)"></div>
   <div style="position:absolute;top:0;bottom:0;left:50%;width:1px;background:rgba(0,0,0,.85)"></div>
@@ -169,7 +174,8 @@ input[type=range]{accent-color:#22d3ee}
 let conn = null;
 let isGameActive = false, isPointerLocked = false, lastLockExit = 0, botMode = true, mouseDown = false, noLock = false;
 // true when the mouse is locked, or when locking failed (file://, iframes) and the pause screen is closed
-const inputActive = () => isPointerLocked || (noLock && pauseOverlay.classList.contains('hidden'));
+let consoleOpen = false, bloomOn = true, godMode = false;
+const inputActive = () => !consoleOpen && (isPointerLocked || (noLock && pauseOverlay.classList.contains('hidden')));
 const userSettings = { sensitivity: 0.0022, fov: 75, crosshairStyle: 'cross', crosshairColor: '#ffffff', crosshairSize: 12, botLevel: 2, adsSens: 0.3 };
 
 const mkBody = (z, extra) => Object.assign({ x: 0, y: 3, z, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, percent: 0, score: 0, canDoubleJump: true, isGrounded: false, mesh: null }, extra);
@@ -187,8 +193,8 @@ const WEAPONS = {
   5: { fireRate: 55, damage: 2.2, knockback: 3.2, range: 120, spread: 0.01, color: 0xf472b6, smg: true, bloomPerShot: 0.012, maxBloom: 0.5, bloomDecay: 0.35 }
 };
 let zooming = false, curFov = 75, smgBloom = 0;
-const DEFAULT_BINDS = { forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', dash: 'ShiftLeft', boost: 'KeyQ', weapon1: 'Digit1', weapon2: 'Digit2', weapon3: 'Digit3', weapon4: 'Digit4', weapon5: 'Digit5', scoreboard: 'Tab', chat: 'KeyT' };
-const BIND_LABELS = { forward: 'Forward', back: 'Back', left: 'Left', right: 'Right', jump: 'Jump', dash: 'Dash', boost: 'Boost', weapon1: 'Rifle', weapon2: 'Shotgun', weapon3: 'Rocket', weapon4: 'Sniper', weapon5: 'SMG', scoreboard: 'Scoreboard', chat: 'Chat' };
+const DEFAULT_BINDS = { forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', dash: 'ShiftLeft', boost: 'KeyQ', weapon1: 'Digit1', weapon2: 'Digit2', weapon3: 'Digit3', weapon4: 'Digit4', weapon5: 'Digit5', scoreboard: 'Tab', chat: 'KeyT', console: 'Backquote' };
+const BIND_LABELS = { forward: 'Forward', back: 'Back', left: 'Left', right: 'Right', jump: 'Jump', dash: 'Dash', boost: 'Boost', weapon1: 'Rifle', weapon2: 'Shotgun', weapon3: 'Rocket', weapon4: 'Sniper', weapon5: 'SMG', scoreboard: 'Scoreboard', chat: 'Chat', console: 'Console' };
 let binds = Object.assign({}, DEFAULT_BINDS);
 try { Object.assign(binds, JSON.parse(localStorage.getItem('knockbackBinds') || '{}')); } catch (e) {}
 const norm = c => c === 'ShiftRight' ? 'ShiftLeft' : c === 'ControlRight' ? 'ControlLeft' : c === 'AltRight' ? 'AltLeft' : c;
@@ -497,6 +503,7 @@ function stepBody(b, dt, mx, mz) {
   collide(b);
 }
 function applyKnockback(b, damage, kb, d) {
+  if (b === localPlayer && godMode) return;
   b.percent += damage;
   const imp = kb * (1 + b.percent / 100);
   b.vx += d.x * imp; b.vy += Math.max(d.y * imp, 7); b.vz += d.z * imp; b.isGrounded = false;
@@ -682,7 +689,7 @@ function fireWeapon() {
     tracer(start, d, Math.min(w.range, wall), w.color);
     if (conn && conn.open) conn.send({ type: 'TRACER', sx: start.x, sy: start.y, sz: start.z, dx: d.x, dy: d.y, dz: d.z, range: Math.min(w.range, wall), color: w.color });
   }
-  if (w.smg) smgBloom = Math.min(w.maxBloom, smgBloom + w.bloomPerShot);
+  if (w.smg && bloomOn) smgBloom = Math.min(w.maxBloom, smgBloom + w.bloomPerShot);
   gunKick = w.sniper ? 0.3 : w.smg ? 0.05 : 0.12;
 }
 
@@ -704,6 +711,7 @@ function setupInput() {
   document.addEventListener('contextmenu', e => { if (isGameActive) e.preventDefault(); });
   addEventListener('blur', () => { zooming = false; });
   addEventListener('keydown', e => {
+    if (consoleOpen) return;
     if (!chatOpen && isGameActive && (e.code === 'Enter' || isBind(e, 'chat')) && !/INPUT|SELECT/.test(document.activeElement.tagName) && pauseOverlay.classList.contains('hidden')) { e.preventDefault(); openChat(); return; }
     if (chatOpen) return;
     if ((e.ctrlKey || e.metaKey) && isBind(e, 'forward')) e.preventDefault();
@@ -720,13 +728,15 @@ function setupInput() {
     if (e.code === 'Escape' && isGameActive && !isPointerLocked) showPause();
   });
   addEventListener('keyup', e => {
+    if (consoleOpen) return;
     if (isBind(e, 'scoreboard')) showSb(false);
     if (isBind(e, 'forward')) keys.w = false; if (isBind(e, 'left')) keys.a = false;
     if (isBind(e, 'back')) keys.s = false; if (isBind(e, 'right')) keys.d = false;
   });
   switchWeapon(1);
 }
-const CHANGELOG = { version: '1.2', sections: [
+const CHANGELOG = { version: '1.3', sections: [
+  { title: 'Update 1.3', items: ['+ added dev console (press ` to open, type help)', '+ console command: bloom (toggles SMG bloom), plus fov, sens, ads, weapon, fps and more', '+ console command: admin (password protected cheat commands for solo practice)'] },
   { title: 'Update 1.2', items: ['+ added SMG (key 5): fires really fast, but blooms the longer you hold the trigger'] },
   { title: 'Update 1.1', items: ['+ added sniper', '+ added keybind changing', '+ added Ads Sensitivity', '+ added sniper scope'] },
   { title: 'Update 1.1 - Weapon Changes', items: ['+ Rocket now gives you slight knockback when shooting', '+ removed bloom on Rifle', '+ Sniper shoots in a random direction when not scoped', '+ weapon bar follows your keybinds'] }
@@ -747,6 +757,78 @@ function setupChangelog() {
   addEventListener('keydown', e => { if (e.code === 'Escape' && box.style.display === 'flex') { e.stopImmediatePropagation(); close(); } }, true);
   let seen = null; try { seen = localStorage.getItem('knockbackSeenVersion'); } catch (e) {}
   if (seen !== CHANGELOG.version) show();
+}
+// ---------- DEV CONSOLE (` to open) ----------
+const ADMIN_PASS = 'KnockBackGame!';
+let adminUnlocked = false, askingPass = false, dcHist = [], dcHistI = 0;
+function setupConsole() {
+  const box = $('devConsole'), out = $('dcOut'), inp = $('dcIn');
+  const log = (t, c) => { const r = document.createElement('div'); r.textContent = t; r.style.cssText = 'white-space:pre-wrap;color:' + (c || '#cbd5e1'); out.appendChild(r); out.scrollTop = out.scrollHeight; while (out.children.length > 200) out.removeChild(out.firstChild); };
+  const ok = t => log(t, '#6ee7b7'), err = t => log(t, '#fda4af');
+  const open = () => { consoleOpen = true; mouseDown = false; zooming = false; for (const k in keys) keys[k] = false; box.style.display = 'block'; setTimeout(() => inp.focus(), 0); };
+  const close = () => { consoleOpen = false; askingPass = false; inp.type = 'text'; inp.value = ''; box.style.display = 'none'; inp.blur(); };
+  const slider = (id, v) => { const el = $(id); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+  const admin = () => {
+    if (!adminUnlocked) { err('Locked. Use "admin" and enter the password.'); return false; }
+    if (isGameActive && !botMode) { err('Admin commands only work in solo practice.'); return false; }
+    return true;
+  };
+  const num = (v, d) => { const n = parseFloat(v); return isNaN(n) ? d : n; };
+  const CMDS = {
+    help: { d: 'list commands', f() {
+      log('Commands:'); Object.keys(CMDS).forEach(k => log('  ' + k.padEnd(10) + CMDS[k].d + (CMDS[k].admin && !adminUnlocked ? '  [locked]' : ''), CMDS[k].admin ? '#fcd34d' : '#cbd5e1')); } },
+    clear: { d: 'clear the console', f() { out.innerHTML = ''; } },
+    version: { d: 'show game version', f() { ok('Knockback PVP v' + CHANGELOG.version); } },
+    changelog: { d: 'open the change log', f() { $('clOpen').click(); close(); } },
+    bloom: { d: 'toggle SMG bloom (bloom on|off)', f(a) { bloomOn = a[0] === 'on' ? true : a[0] === 'off' ? false : !bloomOn; if (!bloomOn) smgBloom = 0; ok('Bloom ' + (bloomOn ? 'ON' : 'OFF')); } },
+    fov: { d: 'fov <60-110>', f(a) { if (!a[0]) return log('FOV is ' + userSettings.fov); const v = Math.max(60, Math.min(110, num(a[0], 75))); slider('fovSlider', v); ok('FOV ' + v); } },
+    sens: { d: 'sens <0.5-10>', f(a) { if (!a[0]) return log('Sensitivity is ' + (userSettings.sensitivity * 1000).toFixed(1)); const v = Math.max(0.5, Math.min(10, num(a[0], 2.2))); slider('sensSlider', v); ok('Sensitivity ' + v); } },
+    ads: { d: 'ads <10-100> scoped sensitivity %', f(a) { if (!a[0]) return log('ADS sensitivity is ' + Math.round(userSettings.adsSens * 100) + '%'); const v = Math.max(10, Math.min(100, num(a[0], 30))); slider('adsSlider', v); ok('ADS sensitivity ' + v + '%'); } },
+    weapon: { d: 'weapon <1-5> switch weapon', f(a) { const n = Math.round(num(a[0], 0)); if (n < 1 || n > 5) return err('Usage: weapon <1-5>'); switchWeapon(n); ok('Switched to ' + ['Rifle', 'Shotgun', 'Rocket', 'Sniper', 'SMG'][n - 1]); } },
+    fps: { d: 'toggle FPS counter', f() { fpsOn = !fpsOn; $('fpsBox').style.display = fpsOn ? 'block' : 'none'; if (fpsOn) fpsLoop(); ok('FPS counter ' + (fpsOn ? 'ON' : 'OFF')); } },
+    resetbinds: { d: 'reset all keybinds to default', f() { $('bindReset').click(); ok('Keybinds reset'); } },
+    admin: { d: 'unlock admin commands (password)', f() {
+      if (adminUnlocked) return ok('Already unlocked.');
+      askingPass = true; inp.type = 'password'; log('Password:'); } },
+    logout: { d: 'lock admin commands again', f() { adminUnlocked = false; godMode = false; ok('Admin locked.'); } },
+    god: { d: 'toggle no-knockback / no-damage', admin: 1, f() { if (!admin()) return; godMode = !godMode; ok('God mode ' + (godMode ? 'ON' : 'OFF')); } },
+    percent: { d: 'percent <me|bot> <n> set damage %', admin: 1, f(a) { if (!admin()) return; const who = a[0] === 'bot' ? remotePlayer : localPlayer; if (a[0] !== 'bot' && a[0] !== 'me') return err('Usage: percent <me|bot> <n>'); who.percent = Math.max(0, num(a[1], 0)); ok((who === localPlayer ? 'Your' : 'Bot') + ' percent set to ' + who.percent); } },
+    killbot: { d: 'respawn the bot', admin: 1, f() { if (!admin()) return; if (!isGameActive) return err('Start a game first.'); respawn(remotePlayer, -12); ok('Bot respawned'); } },
+    tp: { d: 'tp <x> <y> <z> teleport (y = height)', admin: 1, f(a) { if (!admin()) return; if (!isGameActive) return err('Start a game first.'); localPlayer.x = num(a[0], 0); localPlayer.y = num(a[1], 3); localPlayer.z = num(a[2], 0); localPlayer.vx = localPlayer.vy = localPlayer.vz = 0; ok('Teleported'); } },
+    score: { d: 'score <n> set your KOs', admin: 1, f(a) { if (!admin()) return; localPlayer.score = Math.max(0, Math.round(num(a[0], 0))); $('hudP1Score').textContent = localPlayer.score; ok('Score set to ' + localPlayer.score); } }
+  };
+  const run = line => {
+    const parts = line.trim().split(/\s+/), name = (parts.shift() || '').toLowerCase();
+    if (!name) return;
+    const c = CMDS[name];
+    if (!c) return err('Unknown command "' + name + '". Type help.');
+    try { c.f(parts); } catch (e) { err('Error: ' + e.message); }
+  };
+  inp.addEventListener('keydown', e => {
+    if (e.code === 'Enter') {
+      const v = inp.value; inp.value = '';
+      if (askingPass) {
+        askingPass = false; inp.type = 'text';
+        if (v === ADMIN_PASS) { adminUnlocked = true; ok('Access granted. Admin commands unlocked (solo practice only).'); } else err('Access denied.');
+        return;
+      }
+      if (!v.trim()) return;
+      log('> ' + v, '#67e8f9'); dcHist.push(v); dcHistI = dcHist.length; run(v);
+    } else if (e.code === 'ArrowUp' && !askingPass) { e.preventDefault(); if (dcHistI > 0) inp.value = dcHist[--dcHistI]; }
+    else if (e.code === 'ArrowDown' && !askingPass) { e.preventDefault(); dcHistI = Math.min(dcHist.length, dcHistI + 1); inp.value = dcHist[dcHistI] || ''; }
+  });
+  // capture phase: runs before the game's own key handling
+  addEventListener('keydown', e => {
+    if (isBind(e, 'console')) { e.preventDefault(); e.stopImmediatePropagation(); consoleOpen ? close() : open(); }
+    else if (consoleOpen && e.code === 'Escape') { e.stopImmediatePropagation(); close(); }
+  }, true);
+  log('Dev console. Type help for commands.', '#94a3b8');
+}
+let fpsOn = false;
+function fpsLoop() {
+  let frames = 0, last = performance.now();
+  const tick = now => { if (!fpsOn) return; frames++; if (now - last >= 500) { $('fpsBox').textContent = Math.round(frames * 1000 / (now - last)) + ' fps'; frames = 0; last = now; } requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
 }
 function renderWeaponHud() {
   const order = n => { const m = /^Digit(\d)$/.exec(binds['weapon' + n] || ''); return m ? (+m[1] || 10) : 100 + n; };
@@ -1156,7 +1238,7 @@ function boot() {
   loadThree([
     'https://cdn.jsdelivr.net/npm/three@0.136.0/build/three.min.js',
     'https://unpkg.com/three@0.136.0/build/three.min.js'
-  ], () => { initThree(); setupInput(); setupSettings(); setupChangelog(); setupTabs(); refreshNames(); updateBoostHud(); startTick(); animate(); if (store.get('kb_dev')) connectWS(); });
+  ], () => { initThree(); setupInput(); setupSettings(); setupChangelog(); setupConsole(); setupTabs(); refreshNames(); updateBoostHud(); startTick(); animate(); if (store.get('kb_dev')) connectWS(); });
 }
 if (document.readyState === 'loading') addEventListener('DOMContentLoaded', boot); else boot();
 </script>
