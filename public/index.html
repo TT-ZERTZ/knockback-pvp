@@ -59,6 +59,7 @@ input[type=range]{accent-color:#22d3ee}
   <div id="wpn2" class="glass px-4 py-2 rounded-xl text-center"><div class="text-xs text-slate-400">2</div><div class="text-sm font-bold text-white">Shotgun</div></div>
   <div id="wpn3" class="glass px-4 py-2 rounded-xl text-center"><div class="text-xs text-slate-400">3</div><div class="text-sm font-bold text-white">Rocket</div></div>
   <div id="wpn4" class="glass px-4 py-2 rounded-xl text-center"><div class="text-xs text-slate-400">4</div><div class="text-sm font-bold text-white">Sniper</div></div>
+  <div id="wpn5" class="glass px-4 py-2 rounded-xl text-center"><div class="text-xs text-slate-400">5</div><div class="text-sm font-bold text-white">SMG</div></div>
 </div>
 
 <!-- Settings panel: moved between the menu and the pause screen -->
@@ -182,11 +183,12 @@ const WEAPONS = {
   1: { fireRate: 150, damage: 7, knockback: 11, range: 150, spread: 0, color: 0x67e8f9 },
   2: { fireRate: 650, damage: 4, knockback: 7, range: 100, spread: 0.12, count: 6, color: 0xfb7185 },
   3: { fireRate: 900, damage: 22, knockback: 32, range: 200, spread: 0, color: 0xfbbf24, rocket: true, speed: 48, radius: 5.5, recoil: 7 },
-  4: { fireRate: 1300, damage: 30, knockback: 60, range: 400, spread: 0, color: 0xa78bfa, sniper: true, zoomFov: 22 }
+  4: { fireRate: 1300, damage: 30, knockback: 60, range: 400, spread: 0, color: 0xa78bfa, sniper: true, zoomFov: 22 },
+  5: { fireRate: 55, damage: 2.2, knockback: 3.2, range: 120, spread: 0.01, color: 0xf472b6, smg: true, bloomPerShot: 0.012, maxBloom: 0.5, bloomDecay: 0.35 }
 };
-let zooming = false, curFov = 75;
-const DEFAULT_BINDS = { forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', dash: 'ShiftLeft', boost: 'KeyQ', weapon1: 'Digit1', weapon2: 'Digit2', weapon3: 'Digit3', weapon4: 'Digit4', scoreboard: 'Tab', chat: 'KeyT' };
-const BIND_LABELS = { forward: 'Forward', back: 'Back', left: 'Left', right: 'Right', jump: 'Jump', dash: 'Dash', boost: 'Boost', weapon1: 'Rifle', weapon2: 'Shotgun', weapon3: 'Rocket', weapon4: 'Sniper', scoreboard: 'Scoreboard', chat: 'Chat' };
+let zooming = false, curFov = 75, smgBloom = 0;
+const DEFAULT_BINDS = { forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', dash: 'ShiftLeft', boost: 'KeyQ', weapon1: 'Digit1', weapon2: 'Digit2', weapon3: 'Digit3', weapon4: 'Digit4', weapon5: 'Digit5', scoreboard: 'Tab', chat: 'KeyT' };
+const BIND_LABELS = { forward: 'Forward', back: 'Back', left: 'Left', right: 'Right', jump: 'Jump', dash: 'Dash', boost: 'Boost', weapon1: 'Rifle', weapon2: 'Shotgun', weapon3: 'Rocket', weapon4: 'Sniper', weapon5: 'SMG', scoreboard: 'Scoreboard', chat: 'Chat' };
 let binds = Object.assign({}, DEFAULT_BINDS);
 try { Object.assign(binds, JSON.parse(localStorage.getItem('knockbackBinds') || '{}')); } catch (e) {}
 const norm = c => c === 'ShiftRight' ? 'ShiftLeft' : c === 'ControlRight' ? 'ControlLeft' : c === 'AltRight' ? 'AltLeft' : c;
@@ -459,6 +461,9 @@ function buildGunModel(i) {
   } else if (i === 2) { // shotgun
     cyl(.035, .035, .75, body, -.04, .03, -.38); cyl(.035, .035, .75, body, .04, .03, -.38); cyl(.055, .055, .28, wood, 0, -.02, -.3);
     box(.08, .14, .4, wood, 0, -.03, .2); box(.06, .16, .07, body, 0, -.13, .08); cyl(.05, .05, .04, accent, 0, .03, -.77);
+  } else if (i === 5) { // smg
+    cyl(.035, .035, .42, body, 0, .02, -.22); cyl(.05, .05, .3, M(0x334155), 0, 0, -.05); box(.07, .12, .3, body, 0, -.02, .2);
+    box(.05, .14, .07, body, 0, -.12, .12); box(.045, .22, .07, M(0x0f172a), 0, -.18, -.02); box(.03, .04, .16, accent, 0, .08, -.02); cyl(.045, .045, .05, accent, 0, .02, -.45);
   } else if (i === 4) { // sniper
     cyl(.03, .03, 1.1, body, 0, .03, -.55); cyl(.05, .05, .4, M(0x334155), 0, .02, -.1); box(.07, .13, .5, body, 0, -.03, .3);
     box(.05, .12, .07, body, 0, -.12, .12); cyl(.04, .04, .3, M(0x0f172a), 0, .12, -.15); cyl(.045, .045, .03, accent, 0, .12, -.31); cyl(.045, .045, .06, accent, 0, .03, -1.12);
@@ -514,6 +519,8 @@ function updateLocal(dt) {
     if (localPlayer.weapon !== 4) zooming = false;
     curFov += (tf - curFov) * Math.min(1, dt * 14);
     if (Math.abs(camera.fov - curFov) > 0.01) { camera.fov = curFov; camera.updateProjectionMatrix(); }
+    if (!(mouseDown && localPlayer.weapon === 5) || smgBloom <= 0) smgBloom = Math.max(0, smgBloom - WEAPONS[5].bloomDecay * dt);
+    crosshair.style.transform = 'translate(-50%,-50%) scale(' + (1 + smgBloom * 5 * (localPlayer.weapon === 5 ? 1 : 0)).toFixed(2) + ')';
     const sc = zooming && localPlayer.weapon === 4 && curFov < 40;
     if (gun) gun.visible = !sc;
     $('scope').classList.toggle('hidden', !sc); crosshair.style.visibility = sc ? 'hidden' : 'visible'; }
@@ -654,7 +661,7 @@ function fireWeapon() {
   for (let i = 0; i < (w.count || 1); i++) {
     const d = dir.clone();
     if (w.sniper && !zooming) { d.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1); if (d.lengthSq() < 1e-4) d.set(0, 0, -1); d.normalize(); }
-    else if (w.spread) { d.x += (Math.random() - .5) * w.spread; d.y += (Math.random() - .5) * w.spread; d.z += (Math.random() - .5) * w.spread; d.normalize(); }
+    else if (w.spread || w.smg) { const sp = (w.spread || 0) + (w.smg ? smgBloom : 0); d.x += (Math.random() - .5) * sp; d.y += (Math.random() - .5) * sp; d.z += (Math.random() - .5) * sp; d.normalize(); }
     const wall = rayBlock(origin, d, w.range);
     if (remotePlayer.connected) {
       // plain ray-vs-sphere test around the opponent (no THREE.Raycaster, so nothing can crash here)
@@ -675,7 +682,8 @@ function fireWeapon() {
     tracer(start, d, Math.min(w.range, wall), w.color);
     if (conn && conn.open) conn.send({ type: 'TRACER', sx: start.x, sy: start.y, sz: start.z, dx: d.x, dy: d.y, dz: d.z, range: Math.min(w.range, wall), color: w.color });
   }
-  gunKick = w.sniper ? 0.3 : 0.12;
+  if (w.smg) smgBloom = Math.min(w.maxBloom, smgBloom + w.bloomPerShot);
+  gunKick = w.sniper ? 0.3 : w.smg ? 0.05 : 0.12;
 }
 
 // ---------- INPUT ----------
@@ -707,7 +715,7 @@ function setupInput() {
     const typing = /INPUT|SELECT/.test(document.activeElement.tagName);
     if (e.code === 'Backslash' && myAdmin && !typing) { e.preventDefault(); toggleAdmin(); }
     if (isBind(e, 'scoreboard') && !typing) { e.preventDefault(); showSb(true); }
-    [1, 2, 3, 4].forEach(n => { if (isBind(e, 'weapon' + n)) switchWeapon(n); });
+    [1, 2, 3, 4, 5].forEach(n => { if (isBind(e, 'weapon' + n)) switchWeapon(n); });
     // Esc normally exits pointer lock itself; this covers the case where the lock never started
     if (e.code === 'Escape' && isGameActive && !isPointerLocked) showPause();
   });
@@ -718,16 +726,17 @@ function setupInput() {
   });
   switchWeapon(1);
 }
-const CHANGELOG = { version: '1.1', sections: [
-  { title: 'Change Log', items: ['+ added sniper', '+ added keybind changing', '+ added Ads Sensitivity', '+ added sniper scope'] },
-  { title: 'Weapon Changes', items: ['+ Rocket now gives you slight knockback when shooting', '+ removed bloom on Rifle', '+ Sniper shoots in a random direction when not scoped', '+ weapon bar follows your keybinds'] }
+const CHANGELOG = { version: '1.2', sections: [
+  { title: 'Update 1.2', items: ['+ added SMG (key 5): fires really fast, but blooms the longer you hold the trigger'] },
+  { title: 'Update 1.1', items: ['+ added sniper', '+ added keybind changing', '+ added Ads Sensitivity', '+ added sniper scope'] },
+  { title: 'Update 1.1 - Weapon Changes', items: ['+ Rocket now gives you slight knockback when shooting', '+ removed bloom on Rifle', '+ Sniper shoots in a random direction when not scoped', '+ weapon bar follows your keybinds'] }
 ] };
 function setupChangelog() {
   const box = $('changelog'), body = $('clBody');
   $('clVersion').textContent = 'Version ' + CHANGELOG.version;
   CHANGELOG.sections.forEach((sec, i) => {
     if (i) { const hr = document.createElement('div'); hr.style.cssText = 'border-top:1px solid rgba(255,255,255,.18);margin:14px 0'; body.appendChild(hr); }
-    if (i) { const h = document.createElement('div'); h.className = 'font-bold text-white mb-2'; h.textContent = sec.title; body.appendChild(h); }
+    { const h = document.createElement('div'); h.className = 'font-bold text-white mb-2'; h.textContent = sec.title; body.appendChild(h); }
     sec.items.forEach(t => { const r = document.createElement('div'); r.className = 'mb-2 ' + (t[0] === '+' ? 'text-emerald-300' : t[0] === '-' ? 'text-rose-300' : 'text-slate-200'); r.textContent = t; body.appendChild(r); });
   });
   const show = () => { box.style.display = 'flex'; }, hide = () => { box.style.display = 'none'; };
@@ -742,13 +751,13 @@ function setupChangelog() {
 function renderWeaponHud() {
   const order = n => { const m = /^Digit(\d)$/.exec(binds['weapon' + n] || ''); return m ? (+m[1] || 10) : 100 + n; };
   const hud = $('weaponHud');
-  [1, 2, 3, 4].sort((a, b) => order(a) - order(b) || a - b).forEach(n => {
+  [1, 2, 3, 4, 5].sort((a, b) => order(a) - order(b) || a - b).forEach(n => {
     const el = $('wpn' + n); el.firstElementChild.textContent = keyName(binds['weapon' + n]); hud.appendChild(el);
   });
 }
 function switchWeapon(i) {
   localPlayer.weapon = i; zooming = false;
-  [1, 2, 3, 4].forEach(n => $('wpn' + n).className = 'glass px-4 py-2 rounded-xl text-center ' + (n === i ? 'ring-2 ring-cyan-300' : 'opacity-60'));
+  [1, 2, 3, 4, 5].forEach(n => $('wpn' + n).className = 'glass px-4 py-2 rounded-xl text-center ' + (n === i ? 'ring-2 ring-cyan-300' : 'opacity-60'));
   if (gun) setGunModel(i);
   renderWeaponHud();
 }
