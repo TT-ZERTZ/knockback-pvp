@@ -18,7 +18,7 @@ input[type=range]{accent-color:#22d3ee}
 <body class="w-screen h-screen relative">
 <canvas id="gameCanvas" class="w-full h-full block"></canvas>
 <div id="crosshair" class="hidden"></div>
-<div id="changelog" class="hidden" style="position:fixed;inset:0;z-index:100;background:rgba(2,6,23,.6);display:flex;align-items:center;justify-content:center;padding:16px">
+<div id="changelog" style="position:fixed;inset:0;z-index:100;background:rgba(2,6,23,.6);display:none;align-items:center;justify-content:center;padding:16px">
   <div class="glass rounded-3xl text-slate-100 shadow-2xl relative w-full max-w-md" style="max-height:80vh;display:flex;flex-direction:column">
     <button id="clClose" type="button" aria-label="Close" class="absolute top-3 right-4 text-slate-400 hover:text-white text-2xl font-bold leading-none">&times;</button>
     <div class="px-7 pt-6 pb-3"><div class="text-xl font-black text-cyan-300">Change Log</div><div id="clVersion" class="text-xs text-slate-400"></div></div>
@@ -730,13 +730,14 @@ function setupChangelog() {
     if (i) { const h = document.createElement('div'); h.className = 'font-bold text-white mb-2'; h.textContent = sec.title; body.appendChild(h); }
     sec.items.forEach(t => { const r = document.createElement('div'); r.className = 'mb-2 ' + (t[0] === '+' ? 'text-emerald-300' : t[0] === '-' ? 'text-rose-300' : 'text-slate-200'); r.textContent = t; body.appendChild(r); });
   });
-  const close = () => { box.classList.add('hidden'); try { localStorage.setItem('knockbackSeenVersion', CHANGELOG.version); } catch (e) {} };
+  const show = () => { box.style.display = 'flex'; }, hide = () => { box.style.display = 'none'; };
+  const close = () => { hide(); try { localStorage.setItem('knockbackSeenVersion', CHANGELOG.version); } catch (e) {} };
   $('clClose').addEventListener('click', close);
   box.addEventListener('mousedown', e => { if (e.target === box) close(); });
-  $('clOpen').addEventListener('click', () => box.classList.remove('hidden'));
-  addEventListener('keydown', e => { if (e.code === 'Escape' && !box.classList.contains('hidden')) { e.stopImmediatePropagation(); close(); } }, true);
+  $('clOpen').addEventListener('click', show);
+  addEventListener('keydown', e => { if (e.code === 'Escape' && box.style.display === 'flex') { e.stopImmediatePropagation(); close(); } }, true);
   let seen = null; try { seen = localStorage.getItem('knockbackSeenVersion'); } catch (e) {}
-  if (seen !== CHANGELOG.version) box.classList.remove('hidden');
+  if (seen !== CHANGELOG.version) show();
 }
 function renderWeaponHud() {
   const order = n => { const m = /^Digit(\d)$/.exec(binds['weapon' + n] || ''); return m ? (+m[1] || 10) : 100 + n; };
