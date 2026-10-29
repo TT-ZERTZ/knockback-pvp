@@ -18,6 +18,12 @@ input[type=range]{accent-color:#22d3ee}
 <body class="w-screen h-screen relative">
 <canvas id="gameCanvas" class="w-full h-full block"></canvas>
 <div id="crosshair" class="hidden"></div>
+<div id="scope" class="hidden" style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at center,transparent 0,transparent 36vmin,rgba(0,0,0,.55) 36.1vmin,#000 40vmin)">
+  <div style="position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(0,0,0,.85)"></div>
+  <div style="position:absolute;top:0;bottom:0;left:50%;width:1px;background:rgba(0,0,0,.85)"></div>
+  <div style="position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:#ef4444"></div>
+  <div style="position:absolute;inset:0;border-radius:50%;margin:auto;width:72vmin;height:72vmin;border:2px solid #000"></div>
+</div>
 
 <div id="hud" class="absolute top-0 left-0 w-full p-4 pointer-events-none flex justify-between items-start hidden">
   <div class="glass p-4 rounded-2xl min-w-[190px]">
@@ -58,6 +64,10 @@ input[type=range]{accent-color:#22d3ee}
     <input id="fovSlider" type="range" min="60" max="110" step="1" value="75" class="w-full cursor-pointer">
   </div>
   <div>
+    <div class="flex justify-between text-xs font-bold text-slate-300 mb-1"><label for="adsSlider">Scoped (ADS) sensitivity</label><span id="adsVal" class="text-cyan-300">30%</span></div>
+    <input id="adsSlider" type="range" min="10" max="100" step="5" value="30" class="w-full cursor-pointer">
+  </div>
+  <div>
     <label for="crosshairStyle" class="block text-xs font-bold text-slate-300 mb-1">Crosshair style</label>
     <select id="crosshairStyle" class="w-full bg-slate-900 border border-slate-700 text-xs font-semibold rounded-lg p-2.5 text-slate-200">
       <option value="cross">Classic cross</option><option value="dot">Dot</option><option value="circle">Circle</option><option value="box">Box</option>
@@ -72,6 +82,10 @@ input[type=range]{accent-color:#22d3ee}
   <div>
     <div class="flex justify-between text-xs font-bold text-slate-300 mb-1"><label for="botSlider">Bot difficulty (solo)</label><span id="botVal" class="text-cyan-300">Normal</span></div>
     <input id="botSlider" type="range" min="1" max="3" step="1" value="2" class="w-full cursor-pointer">
+  </div>
+  <div>
+    <div class="flex justify-between items-center mb-1"><span class="text-xs font-bold text-slate-300">Keybinds <span class="text-slate-500 font-normal">(click, then press a key)</span></span><button id="bindReset" type="button" class="text-[11px] font-bold text-cyan-300 hover:text-white">Reset</button></div>
+    <div id="bindList" class="grid grid-cols-2 gap-1.5"></div>
   </div>
 </div>
 
@@ -147,7 +161,7 @@ let conn = null;
 let isGameActive = false, isPointerLocked = false, lastLockExit = 0, botMode = true, mouseDown = false, noLock = false;
 // true when the mouse is locked, or when locking failed (file://, iframes) and the pause screen is closed
 const inputActive = () => isPointerLocked || (noLock && pauseOverlay.classList.contains('hidden'));
-const userSettings = { sensitivity: 0.0022, fov: 75, crosshairStyle: 'cross', crosshairColor: '#ffffff', crosshairSize: 12, botLevel: 2 };
+const userSettings = { sensitivity: 0.0022, fov: 75, crosshairStyle: 'cross', crosshairColor: '#ffffff', crosshairSize: 12, botLevel: 2, adsSens: 0.3 };
 
 const mkBody = (z, extra) => Object.assign({ x: 0, y: 3, z, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, percent: 0, score: 0, canDoubleJump: true, isGrounded: false, mesh: null }, extra);
 const localPlayer = mkBody(12, { dashCooldown: 0, weapon: 1, boosts: 0 });
@@ -160,9 +174,16 @@ const WEAPONS = {
   1: { fireRate: 150, damage: 7, knockback: 11, range: 150, spread: 0, color: 0x67e8f9 },
   2: { fireRate: 650, damage: 4, knockback: 7, range: 100, spread: 0.12, count: 6, color: 0xfb7185 },
   3: { fireRate: 900, damage: 22, knockback: 32, range: 200, spread: 0, color: 0xfbbf24, rocket: true, speed: 48, radius: 5.5, recoil: 7 },
-  4: { fireRate: 1300, damage: 30, knockback: 60, range: 400, spread: 0, color: 0xa78bfa, sniper: true, zoomFov: 22, recoil: 14 }
+  4: { fireRate: 1300, damage: 30, knockback: 60, range: 400, spread: 0, color: 0xa78bfa, sniper: true, zoomFov: 22 }
 };
 let zooming = false, curFov = 75;
+const DEFAULT_BINDS = { forward: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', dash: 'ShiftLeft', boost: 'KeyQ', weapon1: 'Digit1', weapon2: 'Digit2', weapon3: 'Digit3', weapon4: 'Digit4', scoreboard: 'Tab', chat: 'KeyT' };
+const BIND_LABELS = { forward: 'Forward', back: 'Back', left: 'Left', right: 'Right', jump: 'Jump', dash: 'Dash', boost: 'Boost', weapon1: 'Rifle', weapon2: 'Shotgun', weapon3: 'Rocket', weapon4: 'Sniper', scoreboard: 'Scoreboard', chat: 'Chat' };
+let binds = Object.assign({}, DEFAULT_BINDS);
+try { Object.assign(binds, JSON.parse(localStorage.getItem('knockbackBinds') || '{}')); } catch (e) {}
+const norm = c => c === 'ShiftRight' ? 'ShiftLeft' : c === 'ControlRight' ? 'ControlLeft' : c === 'AltRight' ? 'AltLeft' : c;
+const isBind = (e, a) => binds[a] && norm(e.code) === norm(binds[a]);
+let rebinding = null;
 let lastShot = 0, dbgShots = 0, dbgErr = '';
 addEventListener('error', e => { dbgErr = e.message; });
 const $ = id => document.getElementById(id);
@@ -485,7 +506,9 @@ function updateLocal(dt) {
     if (localPlayer.weapon !== 4) zooming = false;
     curFov += (tf - curFov) * Math.min(1, dt * 14);
     if (Math.abs(camera.fov - curFov) > 0.01) { camera.fov = curFov; camera.updateProjectionMatrix(); }
-    if (gun) gun.visible = !(zooming && curFov < 40); }
+    const sc = zooming && localPlayer.weapon === 4 && curFov < 40;
+    if (gun) gun.visible = !sc;
+    $('scope').classList.toggle('hidden', !sc); crosshair.style.visibility = sc ? 'hidden' : 'visible'; }
   if (mouseDown) { try { fireWeapon(); } catch (err) { dbgErr = err.message; } }
 
   if (localPlayer.y < -25) {
@@ -620,9 +643,6 @@ function fireWeapon() {
     const rc = w.recoil; localPlayer.vx -= dir.x * rc; localPlayer.vz -= dir.z * rc; localPlayer.vy -= dir.y * rc; if (dir.y < -0.3) localPlayer.isGrounded = false;
     gunKick = 0.2; return;
   }
-  if (w.sniper) { // lots of recoil; wild shot when not scoped
-    const rc = w.recoil; localPlayer.vx -= dir.x * rc; localPlayer.vz -= dir.z * rc; localPlayer.vy -= dir.y * rc * 0.6; if (dir.y < -0.3) localPlayer.isGrounded = false;
-  }
   for (let i = 0; i < (w.count || 1); i++) {
     const d = dir.clone();
     if (w.sniper && !zooming) { d.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1); if (d.lengthSq() < 1e-4) d.set(0, 0, -1); d.normalize(); }
@@ -658,7 +678,7 @@ function setupInput() {
   document.addEventListener('pointerlockerror', lockFailed);
   document.addEventListener('mousemove', e => {
     if (!inputActive()) return;
-    const zs = zooming ? 0.3 : 1;
+    const zs = zooming ? userSettings.adsSens : 1;
     localPlayer.yaw -= e.movementX * userSettings.sensitivity * zs;
     localPlayer.pitch = Math.max(-1.4, Math.min(1.4, localPlayer.pitch - e.movementY * userSettings.sensitivity * zs));
   });
@@ -668,25 +688,25 @@ function setupInput() {
   document.addEventListener('contextmenu', e => { if (isGameActive) e.preventDefault(); });
   addEventListener('blur', () => { zooming = false; });
   addEventListener('keydown', e => {
-    if (!chatOpen && isGameActive && (e.code === 'Enter' || e.code === 'KeyT') && !/INPUT|SELECT/.test(document.activeElement.tagName) && pauseOverlay.classList.contains('hidden')) { e.preventDefault(); openChat(); return; }
+    if (!chatOpen && isGameActive && (e.code === 'Enter' || isBind(e, 'chat')) && !/INPUT|SELECT/.test(document.activeElement.tagName) && pauseOverlay.classList.contains('hidden')) { e.preventDefault(); openChat(); return; }
     if (chatOpen) return;
-    if ((e.ctrlKey || e.metaKey) && e.code === 'KeyW') e.preventDefault();
-    if (e.code === 'KeyW') keys.w = true; if (e.code === 'KeyA') keys.a = true;
-    if (e.code === 'KeyS') keys.s = true; if (e.code === 'KeyD') keys.d = true;
-    if (e.code === 'Space' && !e.repeat && inputActive()) jump();
-    if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && !e.repeat && inputActive()) dash();
-    if (e.code === 'KeyQ' && !e.repeat && inputActive()) useBoost();
+    if ((e.ctrlKey || e.metaKey) && isBind(e, 'forward')) e.preventDefault();
+    if (isBind(e, 'forward')) keys.w = true; if (isBind(e, 'left')) keys.a = true;
+    if (isBind(e, 'back')) keys.s = true; if (isBind(e, 'right')) keys.d = true;
+    if (isBind(e, 'jump') && !e.repeat && inputActive()) { e.preventDefault(); jump(); }
+    if (isBind(e, 'dash') && !e.repeat && inputActive()) dash();
+    if (isBind(e, 'boost') && !e.repeat && inputActive()) useBoost();
     const typing = /INPUT|SELECT/.test(document.activeElement.tagName);
     if (e.code === 'Backslash' && myAdmin && !typing) { e.preventDefault(); toggleAdmin(); }
-    if (e.code === 'Tab' && !typing) { e.preventDefault(); showSb(true); }
-    if (e.code === 'Digit1') switchWeapon(1); if (e.code === 'Digit2') switchWeapon(2); if (e.code === 'Digit3') switchWeapon(3); if (e.code === 'Digit4') switchWeapon(4);
+    if (isBind(e, 'scoreboard') && !typing) { e.preventDefault(); showSb(true); }
+    [1, 2, 3, 4].forEach(n => { if (isBind(e, 'weapon' + n)) switchWeapon(n); });
     // Esc normally exits pointer lock itself; this covers the case where the lock never started
     if (e.code === 'Escape' && isGameActive && !isPointerLocked) showPause();
   });
   addEventListener('keyup', e => {
-    if (e.code === 'Tab') showSb(false);
-    if (e.code === 'KeyW') keys.w = false; if (e.code === 'KeyA') keys.a = false;
-    if (e.code === 'KeyS') keys.s = false; if (e.code === 'KeyD') keys.d = false;
+    if (isBind(e, 'scoreboard')) showSb(false);
+    if (isBind(e, 'forward')) keys.w = false; if (isBind(e, 'left')) keys.a = false;
+    if (isBind(e, 'back')) keys.s = false; if (isBind(e, 'right')) keys.d = false;
   });
   switchWeapon(1);
 }
@@ -751,7 +771,7 @@ function updateBoostHud() {
 
 // ---------- POINTER LOCK / PAUSE / SETTINGS ----------
 function mountSettings(slot) { $(slot).appendChild(settingsControls); settingsControls.classList.remove('hidden'); }
-function showPause() { zooming = false; pauseOverlay.classList.remove('hidden'); mountSettings('pauseSettingsSlot'); }
+function showPause() { zooming = false; $('scope').classList.add('hidden'); crosshair.style.visibility = 'visible'; pauseOverlay.classList.remove('hidden'); mountSettings('pauseSettingsSlot'); }
 
 function startGame() {
   isGameActive = true;
@@ -794,10 +814,12 @@ function setupSettings() {
   bind('crosshairColor', v => { userSettings.crosshairColor = v; updateCrosshair(); });
   bind('crosshairSize', v => { $('sizeVal').textContent = v + 'px'; userSettings.crosshairSize = +v; updateCrosshair(); });
   bind('botSlider', v => { userSettings.botLevel = +v; $('botVal').textContent = ['Easy', 'Normal', 'Hard'][v - 1]; });
+  bind('adsSlider', v => { $('adsVal').textContent = v + '%'; userSettings.adsSens = v / 100; });
   updateCrosshair();
+  setupBinds();
 
   // persist settings in localStorage
-  const ids = ['sensSlider', 'fovSlider', 'crosshairStyle', 'crosshairColor', 'crosshairSize', 'botSlider'];
+  const ids = ['sensSlider', 'fovSlider', 'crosshairStyle', 'crosshairColor', 'crosshairSize', 'botSlider', 'adsSlider'];
   try {
     const saved = JSON.parse(localStorage.getItem('knockbackSettings') || '{}');
     ids.forEach(id => {
@@ -811,6 +833,36 @@ function setupSettings() {
   };
   settingsControls.addEventListener('input', save);
   settingsControls.addEventListener('change', save);
+}
+const keyName = c => ({ Space: 'Space', ShiftLeft: 'Shift', ShiftRight: 'Shift', ControlLeft: 'Ctrl', ControlRight: 'Ctrl', AltLeft: 'Alt', AltRight: 'Alt', Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right' }[c] || c.replace(/^Key|^Digit/, ''));
+function setupBinds() {
+  const list = $('bindList');
+  const saveBinds = () => { try { localStorage.setItem('knockbackBinds', JSON.stringify(binds)); } catch (e) {} };
+  const render = () => {
+    list.innerHTML = '';
+    Object.keys(DEFAULT_BINDS).forEach(a => {
+      const row = document.createElement('div'); row.className = 'flex items-center justify-between gap-2 bg-slate-900/70 border border-slate-700 rounded-lg px-2 py-1';
+      const lab = document.createElement('span'); lab.className = 'text-[11px] text-slate-300'; lab.textContent = BIND_LABELS[a];
+      const btn = document.createElement('button'); btn.type = 'button';
+      btn.className = 'text-[11px] font-bold min-w-[52px] rounded px-2 py-1 ' + (rebinding === a ? 'bg-amber-400 text-slate-950' : 'bg-slate-700 text-cyan-300 hover:bg-slate-600');
+      btn.textContent = rebinding === a ? 'Press key' : keyName(binds[a]);
+      btn.addEventListener('click', ev => { ev.stopPropagation(); rebinding = rebinding === a ? null : a; render(); });
+      row.append(lab, btn); list.appendChild(row);
+    });
+  };
+  $('bindReset').addEventListener('click', () => { binds = Object.assign({}, DEFAULT_BINDS); rebinding = null; saveBinds(); render(); });
+  // capture phase so the game never sees the key we are binding
+  addEventListener('keydown', e => {
+    if (!rebinding) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (e.code !== 'Escape') {
+      const old = binds[rebinding];
+      for (const k in binds) if (k !== rebinding && norm(binds[k]) === norm(e.code)) binds[k] = old; // swap on conflict
+      binds[rebinding] = e.code; saveBinds();
+    }
+    rebinding = null; render();
+  }, true);
+  render();
 }
 function updateCrosshair() {
   const { crosshairSize: s, crosshairColor: c, crosshairStyle: st } = userSettings;
@@ -965,7 +1017,7 @@ function leaveGame() {
   localPlayer.score = remotePlayer.score = 0; remotePlayer.connected = false; localPlayer.boosts = 0; updateBoostHud();
   $('hudP1Score').textContent = '0'; $('hudP2Score').textContent = '0'; $('hudRoomCode').textContent = 'SOLO';
   pauseOverlay.classList.add('hidden');
-  ['hud', 'weaponHud', 'crosshair', 'chatBox'].forEach(id => $(id).classList.add('hidden'));
+  ['hud', 'weaponHud', 'crosshair', 'chatBox', 'scope'].forEach(id => $(id).classList.add('hidden'));
   menuOverlay.classList.remove('hidden');
   setStatus(''); setTab('solo');
 }
