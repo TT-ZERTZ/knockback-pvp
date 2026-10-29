@@ -710,10 +710,18 @@ function setupInput() {
   });
   switchWeapon(1);
 }
+function renderWeaponHud() {
+  const order = n => { const m = /^Digit(\d)$/.exec(binds['weapon' + n] || ''); return m ? (+m[1] || 10) : 100 + n; };
+  const hud = $('weaponHud');
+  [1, 2, 3, 4].sort((a, b) => order(a) - order(b) || a - b).forEach(n => {
+    const el = $('wpn' + n); el.firstElementChild.textContent = keyName(binds['weapon' + n]); hud.appendChild(el);
+  });
+}
 function switchWeapon(i) {
   localPlayer.weapon = i; zooming = false;
   [1, 2, 3, 4].forEach(n => $('wpn' + n).className = 'glass px-4 py-2 rounded-xl text-center ' + (n === i ? 'ring-2 ring-cyan-300' : 'opacity-60'));
   if (gun) setGunModel(i);
+  renderWeaponHud();
 }
 function jump() {
   const p = localPlayer;
@@ -839,6 +847,7 @@ function setupBinds() {
   const list = $('bindList');
   const saveBinds = () => { try { localStorage.setItem('knockbackBinds', JSON.stringify(binds)); } catch (e) {} };
   const render = () => {
+    renderWeaponHud();
     list.innerHTML = '';
     Object.keys(DEFAULT_BINDS).forEach(a => {
       const row = document.createElement('div'); row.className = 'flex items-center justify-between gap-2 bg-slate-900/70 border border-slate-700 rounded-lg px-2 py-1';
