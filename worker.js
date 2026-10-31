@@ -1,25 +1,41 @@
-// Knockback PVP backend: one Durable Object ("Hub") holds every WebSocket.
-// Secret needed: ADMIN_KEY  (npx wrangler secret put ADMIN_KEY)
+// Knockback PVP backend — Hub (WebSockets) + Accounts (REST)
+// Secrets needed:
+//   npx wrangler secret put ADMIN_KEY
+//   npx wrangler secret put EMAIL_FROM   (e.g. noreply@yourdomain.com)
+// wrangler.toml durable_objects bindings needed:
+//   HUB  → Hub
+//   ACCT → AccountStore
 
 const clean = s => String(s || '').replace(/[^\w .\-]/g, '').trim().slice(0, 16) || 'Player';
-const same = (a, b) => { // constant-time string compare
+const same = (a, b) => {
   a = String(a || ''); b = String(b || '');
   let d = a.length ^ b.length;
   for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
   return d === 0;
 };
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
+const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: { 'Content-Type': 'application/json', ...CORS } });
 
+// ── Main entry ──────────────────────────────────────────────────────────────
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
+    if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
+
     if (url.pathname === '/ws') {
       if (req.headers.get('Upgrade') !== 'websocket') return new Response('Expected websocket', { status: 426 });
       return env.HUB.get(env.HUB.idFromName('main')).fetch(req);
     }
+
+    if (url.pathname.startsWith('/api/')) {
+      return env.ACCT.get(env.ACCT.idFromName('main')).fetch(req);
+    }
+
     return new Response('Knockback PVP server is running.');
   }
 };
 
+// ── Hub Durable Object (unchanged logic, kept exactly as yours) ─────────────
 export class Hub {
   constructor(state, env) {
     this.state = state; this.env = env;
@@ -126,4 +142,186 @@ export class Hub {
   }
 
   drop(p) { this.leave(p); this.players.delete(p.id); }
+}
+
+// ── AccountStore Durable Object ─────────────────────────────────────────────
+export class AccountStore {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+  }
+
+  async fetch(req) {
+    const url = new URL(req.url);
+    const path = url.pathname.replace('/api/', '');
+    if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
+    let body;
+    try { body = await req.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
+    switch (path) {
+      case 'signup': return this.signup(body);
+      case 'login':  return this.login(body);
+      case 'verify': return this.verify(body);
+      case 'resend': return this.resend(body);
+      case 'logout': return json({ ok: true });
+      default:       return json({ error: 'Not found' }, 404);
+    }
+  }
+
+  async signup({ email, username, password }) {
+    if (!email || !username || !password) return json({ error: 'All fields required.' });
+    email = email.toLowerCase().trim();
+    username = clean(username);
+    if (username.length < 3) return json({ error: 'Username must be 3–16 characters.' });
+    if (password.length < 8) return json({ error: 'Password must be 8+ characters.' });
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: 'Invalid email.' });
+
+    if (await this.state.storage.get('email:' + email)) return json({ error: 'Email already registered.' });
+    if (await this.state.storage.get('user:' + username.toLowerCase())) return json({ error: 'Username taken.' });
+
+    const code = randCode(), hash = await hashPw(password);
+    await this.state.storage.put('pending:' + email, JSON.stringify({ email, username, hash, code, expires: Date.now() + 600000 }));
+    await this.sendCode(email, username, code);
+    return json({ ok: true, needCode: true });
+  }
+
+  async login({ login, password }) {
+    if (!login || !password) return json({ error: 'Email and password required.' });
+    login = login.trim();
+
+    // Try email, then username
+    let email = login.toLowerCase();
+    let raw = await this.state.storage.get('email:' + email);
+    if (!raw) {
+      const emailForUser = await this.state.storage.get('user:' + login.toLowerCase());
+      if (emailForUser) { email = emailForUser; raw = await this.state.storage.get('email:' + email); }
+    }
+    if (!raw) return json({ error: 'Account not found.' });
+    const a = JSON.parse(raw);
+    if (!await checkPw(password, a.hash)) return json({ error: 'Wrong password.' });
+
+    if (!a.verified) {
+      const code = randCode();
+      a.verifyCode = code; a.verifyExpires = Date.now() + 600000;
+      await this.state.storage.put('email:' + email, JSON.stringify(a));
+      await this.sendCode(email, a.username, code);
+      return json({ needCode: true, email });
+    }
+
+    const token = randToken();
+    a.tokens = (a.tokens || []).filter(t => t.expires > Date.now());
+    a.tokens.push({ token, expires: Date.now() + 30 * 86400000 });
+    await this.state.storage.put('email:' + email, JSON.stringify(a));
+    return json({ ok: true, token, username: a.username });
+  }
+
+  async verify({ email, code }) {
+    if (!email || !code) return json({ error: 'Email and code required.' });
+    email = email.toLowerCase().trim();
+    code = String(code).trim();
+
+    // Pending signup
+    const pendingRaw = await this.state.storage.get('pending:' + email);
+    if (pendingRaw) {
+      const p = JSON.parse(pendingRaw);
+      if (Date.now() > p.expires) { await this.state.storage.delete('pending:' + email); return json({ error: 'Code expired. Sign up again.' }); }
+      if (p.code !== code) return json({ error: 'Wrong code.' });
+      const token = randToken();
+      const acct = { email, username: p.username, hash: p.hash, verified: true, tokens: [{ token, expires: Date.now() + 30 * 86400000 }] };
+      await this.state.storage.put('email:' + email, JSON.stringify(acct));
+      await this.state.storage.put('user:' + p.username.toLowerCase(), email);
+      await this.state.storage.delete('pending:' + email);
+      return json({ ok: true, token, username: p.username });
+    }
+
+    // Existing account (login verify)
+    const raw = await this.state.storage.get('email:' + email);
+    if (!raw) return json({ error: 'Account not found.' });
+    const a = JSON.parse(raw);
+    if (!a.verifyCode || a.verifyCode !== code) return json({ error: 'Wrong code.' });
+    if (Date.now() > (a.verifyExpires || 0)) return json({ error: 'Code expired.' });
+    a.verified = true; delete a.verifyCode; delete a.verifyExpires;
+    const token = randToken();
+    a.tokens = (a.tokens || []).filter(t => t.expires > Date.now());
+    a.tokens.push({ token, expires: Date.now() + 30 * 86400000 });
+    await this.state.storage.put('email:' + email, JSON.stringify(a));
+    return json({ ok: true, token, username: a.username });
+  }
+
+  async resend({ email }) {
+    if (!email) return json({ error: 'Email required.' });
+    email = email.toLowerCase().trim();
+
+    const pendingRaw = await this.state.storage.get('pending:' + email);
+    if (pendingRaw) {
+      const p = JSON.parse(pendingRaw);
+      p.code = randCode(); p.expires = Date.now() + 600000;
+      await this.state.storage.put('pending:' + email, JSON.stringify(p));
+      await this.sendCode(email, p.username, p.code);
+      return json({ ok: true });
+    }
+    const raw = await this.state.storage.get('email:' + email);
+    if (!raw) return json({ error: 'Account not found.' });
+    const a = JSON.parse(raw);
+    a.verifyCode = randCode(); a.verifyExpires = Date.now() + 600000;
+    await this.state.storage.put('email:' + email, JSON.stringify(a));
+    await this.sendCode(email, a.username, a.verifyCode);
+    return json({ ok: true });
+  }
+
+  async sendCode(email, username, code) {
+    // MailChannels — free on Cloudflare Workers, no API key needed
+    // Requires SPF record: v=spf1 include:relay.mailchannels.net ~all
+    try {
+      await fetch('https://api.mailchannels.net/tx/v1/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email, name: username }] }],
+          from: {
+            email: this.env.EMAIL_FROM || 'noreply@knockbackpvp.zertztt.workers.dev',
+            name: 'Knockback PVP'
+          },
+          subject: 'Your code: ' + code,
+          content: [{
+            type: 'text/html',
+            value: `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:auto;background:#0f172a;color:#f1f5f9;padding:32px;border-radius:16px">
+              <h2 style="color:#22d3ee;margin:0 0 12px">Knockback PVP</h2>
+              <p style="margin:0 0 20px">Hey <strong>${username}</strong>, here's your verification code:</p>
+              <div style="font-size:2.4rem;font-weight:900;letter-spacing:.3em;color:#fbbf24;background:#1e293b;border-radius:12px;padding:20px;text-align:center;margin-bottom:20px">${code}</div>
+              <p style="color:#94a3b8;font-size:.85rem;margin:0">Expires in 10 minutes. Didn't request this? Ignore it.</p>
+            </div>`
+          }]
+        })
+      });
+    } catch (_) {}
+  }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function randCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function randToken() {
+  const arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  return [...arr].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function hashPw(pw) {
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
+  return btoa(String.fromCharCode(...salt)) + '.' + btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+
+async function checkPw(pw, stored) {
+  try {
+    const [saltB64, hashB64] = stored.split('.');
+    const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
+    return btoa(String.fromCharCode(...new Uint8Array(bits))) === hashB64;
+  } catch { return false; }
 }
