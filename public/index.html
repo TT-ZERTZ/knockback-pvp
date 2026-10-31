@@ -27,6 +27,65 @@ input[type=range]{accent-color:#22d3ee}
 /* Right-side HUD panels */
 #rightHud{position:fixed;right:16px;top:50%;transform:translateY(-50%);pointer-events:none;display:flex;flex-direction:column;gap:6px;z-index:25;min-width:160px}
 #loadoutHudPanel{pointer-events:none}
+
+/* ===== RIVALS-STYLE LOADOUT ===== */
+.lo-screen{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;color:#f1f5f9;
+  background:radial-gradient(ellipse at 50% 0%,rgba(30,41,82,.55),rgba(2,6,23,.94) 70%),rgba(2,6,23,.9);backdrop-filter:blur(10px);overflow:auto}
+.lo-screen.hidden{display:none}
+.lo-top{display:flex;align-items:center;gap:14px;padding:18px 28px 6px}
+.lo-title{font-weight:900;font-size:30px;letter-spacing:.14em;font-style:italic;text-transform:uppercase;text-shadow:0 2px 0 rgba(0,0,0,.5)}
+.lo-sub{font-size:11px;color:#64748b;letter-spacing:.2em;text-transform:uppercase;font-weight:700}
+.lo-x{margin-left:auto;width:44px;height:44px;border-radius:12px;background:#ef4444;border:2px solid #fca5a5;color:#fff;font-weight:900;font-size:20px;cursor:pointer;box-shadow:0 4px 0 #991b1b;transition:transform .08s}
+.lo-x:active{transform:translateY(3px);box-shadow:0 1px 0 #991b1b}
+.lo-slots{display:flex;gap:14px;justify-content:center;padding:18px 24px 6px;flex-wrap:wrap}
+.lo-card{--rc:#9ca3af;position:relative;width:168px;height:228px;border-radius:14px;cursor:pointer;overflow:hidden;
+  background:linear-gradient(180deg,rgba(15,23,42,.9),rgba(15,23,42,.75)),linear-gradient(180deg,var(--rc),transparent);
+  border:2px solid color-mix(in srgb,var(--rc) 55%,#0f172a);transition:transform .15s,box-shadow .15s,border-color .15s;
+  display:flex;flex-direction:column;align-items:center;user-select:none}
+.lo-card::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 42%,color-mix(in srgb,var(--rc) 38%,transparent),transparent 62%);pointer-events:none}
+.lo-card:hover{transform:translateY(-4px);border-color:var(--rc)}
+.lo-card.sel{transform:translateY(-10px) scale(1.04);border-color:#fff;box-shadow:0 0 0 2px var(--rc),0 14px 34px color-mix(in srgb,var(--rc) 55%,transparent)}
+.lo-card .lo-slotname{align-self:stretch;display:flex;justify-content:space-between;align-items:center;padding:8px 10px;font-size:11px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:#cbd5e1;position:relative}
+.lo-card .lo-key{background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:1px 7px;font-size:11px;color:#fff}
+.lo-card .lo-ico{flex:1;display:flex;align-items:center;justify-content:center;font-size:68px;filter:drop-shadow(0 6px 8px rgba(0,0,0,.6));position:relative;transition:transform .2s}
+.lo-card:hover .lo-ico,.lo-card.sel .lo-ico{transform:scale(1.12) rotate(-6deg)}
+.lo-card .lo-name{align-self:stretch;text-align:center;padding:9px 6px 10px;font-weight:900;font-size:15px;letter-spacing:.04em;text-transform:uppercase;background:linear-gradient(180deg,rgba(0,0,0,.2),rgba(0,0,0,.65));border-top:2px solid var(--rc);position:relative}
+.lo-card .lo-name small{display:block;font-size:9px;letter-spacing:.2em;color:var(--rc);margin-top:1px}
+.lo-body{display:flex;gap:18px;padding:14px 28px 26px;flex:1;min-height:0;max-width:1180px;width:100%;margin:0 auto;box-sizing:border-box}
+.lo-panel{background:rgba(15,23,42,.72);border:1px solid rgba(255,255,255,.1);border-radius:16px}
+.lo-grid-wrap{flex:1.7;padding:14px 16px;display:flex;flex-direction:column;min-width:0}
+.lo-grid-head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+.lo-grid-head b{font-size:18px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
+.lo-grid-head span{font-size:11px;color:#64748b;font-weight:700}
+.lo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;align-content:start}
+.lo-item{--rc:#9ca3af;position:relative;height:150px;border-radius:12px;cursor:pointer;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:8px 6px 8px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--rc) 28%,#0f172a),#0b1224);border:2px solid color-mix(in srgb,var(--rc) 45%,#0f172a);transition:all .12s}
+.lo-item:hover{border-color:var(--rc);transform:translateY(-2px)}
+.lo-item.insp{border-color:#fff;box-shadow:0 0 0 2px var(--rc)}
+.lo-item .ico{font-size:50px;margin-top:10px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.6))}
+.lo-item .nm{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;text-align:center}
+.lo-item .tag{position:absolute;top:6px;left:6px;background:#22c55e;color:#04210f;font-size:9px;font-weight:900;letter-spacing:.1em;padding:2px 6px;border-radius:5px}
+.lo-info{flex:1;padding:18px;display:flex;flex-direction:column;align-items:center;text-align:center;min-width:240px;
+  background:linear-gradient(180deg,rgba(15,23,42,.8),rgba(15,23,42,.8))}
+.lo-prev{--rc:#9ca3af;width:100%;height:170px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:96px;position:relative;overflow:hidden;
+  background:radial-gradient(circle at 50% 55%,color-mix(in srgb,var(--rc) 45%,transparent),rgba(2,6,23,.2) 70%);border:2px solid color-mix(in srgb,var(--rc) 50%,#0f172a)}
+.lo-prev span{animation:lo-float 3s ease-in-out infinite;filter:drop-shadow(0 10px 12px rgba(0,0,0,.7))}
+@keyframes lo-float{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-8px) rotate(6deg)}}
+.lo-rar{font-size:11px;font-weight:900;letter-spacing:.24em;text-transform:uppercase;margin-top:14px}
+.lo-iname{font-size:26px;font-weight:900;font-style:italic;text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+.lo-desc{font-size:12px;color:#94a3b8;margin-top:6px;min-height:34px}
+.lo-eq{margin-top:auto;width:100%;padding:13px;border-radius:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;font-size:15px;cursor:pointer;border:2px solid #86efac;background:#22c55e;color:#04210f;box-shadow:0 5px 0 #15803d;transition:transform .08s}
+.lo-eq:active{transform:translateY(4px);box-shadow:0 1px 0 #15803d}
+.lo-eq.on{background:#334155;border-color:#64748b;color:#94a3b8;box-shadow:0 5px 0 #1e293b;cursor:default}
+@media(max-width:760px){.lo-body{flex-direction:column}.lo-card{width:calc(33% - 10px);min-width:104px;height:170px}.lo-card .lo-ico{font-size:44px}.lo-title{font-size:22px}}
+/* ===== RIVALS-STYLE IN-GAME HOTBAR ===== */
+#weaponHud{left:50%!important;right:auto!important;bottom:16px!important;transform:translateX(-50%);flex-direction:row!important;align-items:flex-end!important;gap:8px!important}
+#weaponHud>.hb{position:relative;width:128px;padding:8px 8px 8px 18px!important;border-radius:10px!important;text-align:center!important;opacity:.6;transition:all .12s;
+  background:rgba(15,23,42,.72);border:2px solid rgba(255,255,255,.14)}
+#weaponHud>.hb .k{position:absolute;top:50%;transform:translateY(-50%);left:7px;font-size:10px;font-weight:900;color:#94a3b8}
+#weaponHud>.hb .hb-ico{font-size:22px;line-height:1.1}
+#weaponHud>.hb .hb-lbl{font-size:10px!important;font-weight:900;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#weaponHud>.hb.hb-active{opacity:1!important;transform:translateY(-8px) scale(1.08);border-color:#fff;background:rgba(30,41,82,.85);box-shadow:0 0 18px rgba(34,211,238,.45)}
 </style>
 </head>
 <body class="w-screen h-screen relative">
@@ -162,17 +221,13 @@ input[type=range]{accent-color:#22d3ee}
 </div>
 
 <!-- BOTTOM CENTER: Active weapon only -->
-<div id="weaponHud" class="absolute bottom-5 right-4 pointer-events-none flex flex-col gap-1.5 hidden" style="align-items:flex-end">
-  <div id="wpn_primary" class="glass px-3 py-1.5 rounded-xl text-right"><div class="text-[10px] text-slate-400">1 · Primary</div><div class="text-sm font-bold text-white" id="wpnPrimaryLabel">—</div></div>
-  <div id="wpn_secondary" class="glass px-3 py-1.5 rounded-xl text-right"><div class="text-[10px] text-slate-400">2 · Secondary</div><div class="text-sm font-bold text-rose-300" id="wpnSecondaryLabel">—</div></div>
-  <div id="wpn_melee" class="glass px-3 py-1.5 rounded-xl text-right"><div class="text-[10px] text-slate-400">3 · Melee</div><div class="text-sm font-bold text-purple-300" id="wpnMeleeLabel">—</div></div>
-  <div id="wpn_util" class="glass px-3 py-1.5 rounded-xl text-right opacity-60"><div class="text-[10px] text-slate-400">4 · Util</div><div class="text-sm font-bold text-amber-300" id="wpnUtilLabel">—</div></div>
-  <div id="wpn_ability" class="glass px-3 py-1.5 rounded-xl text-right opacity-60"><div class="text-[10px] text-slate-400">E · Ability</div><div class="text-sm font-bold text-sky-300" id="wpnAbilityLabel">—</div></div>
-  <!-- Active indicator -->
-  <div class="glass-bright px-3 py-1.5 rounded-xl text-right mt-1">
-    <div class="text-[10px] text-cyan-400 font-bold">ACTIVE</div>
-    <div class="text-base font-black text-white" id="wpnActiveLabel">—</div>
-  </div>
+<div id="weaponHud" class="absolute pointer-events-none flex hidden">
+  <div id="wpn_primary" class="hb"><span class="k">1</span><div class="hb-lbl text-white" id="wpnPrimaryLabel">—</div></div>
+  <div id="wpn_secondary" class="hb"><span class="k">2</span><div class="hb-lbl text-white" id="wpnSecondaryLabel">—</div></div>
+  <div id="wpn_melee" class="hb"><span class="k">3</span><div class="hb-lbl text-white" id="wpnMeleeLabel">—</div></div>
+  <div id="wpn_util" class="hb"><span class="k">4</span><div class="hb-lbl text-white" id="wpnUtilLabel">—</div></div>
+  <div id="wpn_ability" class="hb" style="opacity:.6"><span class="k">E</span><div class="hb-lbl text-sky-300" id="wpnAbilityLabel">—</div></div>
+  <div class="hidden"><div id="wpnActiveLabel">—</div></div>
 </div>
 
 <!-- STUN FX -->
@@ -238,6 +293,20 @@ input[type=range]{accent-color:#22d3ee}
   </div>
 </div>
 
+<!-- LOADOUT SCREEN (Rivals-style) -->
+<div id="loadoutControls" class="lo-screen hidden">
+  <div class="lo-top">
+    <div><div class="lo-title">Loadout</div><div class="lo-sub">Pick a slot &middot; pick a weapon &middot; equip</div></div>
+    <div class="coin-badge rounded-lg px-3 py-1.5 text-slate-950 font-black text-sm flex items-center gap-1 ml-4">&#11041; <span id="loCoins">0</span></div>
+    <button id="loClose" type="button" class="lo-x" aria-label="Close">&times;</button>
+  </div>
+  <div id="loSlots" class="lo-slots"></div>
+  <div class="lo-body">
+    <div class="lo-panel lo-grid-wrap"><div class="lo-grid-head"><b id="loGridTitle">Primary</b><span id="loGridCount"></span></div><div id="loGrid" class="lo-grid"></div></div>
+    <div class="lo-panel lo-info" id="loInfo"></div>
+  </div>
+</div>
+
 <!-- MAIN MENU -->
 <div id="menuOverlay" class="absolute inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50">
   <div class="glass p-7 rounded-3xl max-w-lg w-full shadow-2xl text-slate-100 text-center">
@@ -274,82 +343,6 @@ input[type=range]{accent-color:#22d3ee}
       <button id="btnFind" class="bg-gradient-to-r from-amber-300 to-rose-400 text-slate-950 font-bold py-3 rounded-xl">Search for a game</button>
       <button id="btnCancelFind" class="hidden bg-slate-800 text-slate-200 font-bold py-3 rounded-xl">Cancel search</button>
       <div id="findStatus" class="text-xs font-semibold text-slate-400 min-h-[1rem]"></div>
-    </div>
-    <!-- LOADOUT TAB -->
-    <div id="loadoutControls" class="hidden text-left mb-4">
-      <div class="grid grid-cols-2 gap-3">
-        <!-- Primary -->
-        <div>
-          <div class="text-xs font-bold text-cyan-300 mb-1.5">Primary Weapon</div>
-          <div class="flex flex-col gap-1" id="primarySlots">
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="primary" data-id="ar">
-              <div class="font-bold text-white">⚡ Assault Rifle</div><div class="text-slate-400 text-[10px]">Accurate, rapid-fire</div>
-            </div>
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="primary" data-id="sniper">
-              <div class="font-bold text-white">🎯 Sniper Rifle</div><div class="text-slate-400 text-[10px]">High knockback, scope</div>
-            </div>
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="primary" data-id="shotgun">
-              <div class="font-bold text-white">💥 Shotgun</div><div class="text-slate-400 text-[10px]">Spread, close-range</div>
-            </div>
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="primary" data-id="rpg">
-              <div class="font-bold text-white">🚀 RPG</div><div class="text-slate-400 text-[10px]">Rocket splash, self-boost</div>
-            </div>
-          </div>
-        </div>
-        <!-- Secondary -->
-        <div>
-          <div class="text-xs font-bold text-rose-300 mb-1.5">Secondary Weapon</div>
-          <div class="flex flex-col gap-1" id="secondarySlots">
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="secondary" data-id="smg">
-              <div class="font-bold text-white">🔥 SMG</div><div class="text-slate-400 text-[10px]">Fast, blooms over time</div>
-            </div>
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="secondary" data-id="pistol">
-              <div class="font-bold text-white">🔫 Pistol</div><div class="text-slate-400 text-[10px]">Semi-auto, precise</div>
-            </div>
-          </div>
-          <div class="text-xs font-bold text-purple-300 mb-1.5 mt-3">Melee</div>
-          <div class="flex flex-col gap-1" id="meleeSlots">
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="melee" data-id="fists">
-              <div class="font-bold text-white">👊 Fists</div><div class="text-slate-400 text-[10px]">Double jump + redirect</div>
-            </div>
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="melee" data-id="scythe">
-              <div class="font-bold text-white">⚔️ Scythe</div><div class="text-slate-400 text-[10px]">Right-click: dash strike</div>
-            </div>
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="melee" data-id="katana">
-              <div class="font-bold text-white">🗡️ Katana</div><div class="text-slate-400 text-[10px]">Right-click: deflect knockback</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- Utility + Ability row -->
-      <div class="grid grid-cols-2 gap-3 mt-3">
-        <div>
-          <div class="text-xs font-bold text-amber-300 mb-1.5">Utility</div>
-          <div class="flex flex-col gap-1" id="utilSlots">
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="util" data-id="grenade">
-              <div class="font-bold text-white">💣 Grenade</div><div class="text-slate-400 text-[10px]">Throw for area knockback</div>
-            </div>
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="util" data-id="grappler">
-              <div class="font-bold text-white">🪝 Grappler</div><div class="text-slate-400 text-[10px]">Hook to any surface</div>
-            </div>
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="util" data-id="boostpad">
-              <div class="font-bold text-white">⬆️ Boost Pad</div><div class="text-slate-400 text-[10px]">Place a launch pad</div>
-            </div>
-          </div>
-        </div>
-        <div>
-          <div class="text-xs font-bold text-sky-300 mb-1.5">Ability (E)</div>
-          <div class="flex flex-col gap-1" id="abilitySlots">
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="ability" data-id="stungun">
-              <div class="font-bold text-white">⚡ Stun Gun</div><div class="text-slate-400 text-[10px]">Stuns opponent 2.5s</div>
-            </div>
-            <div class="loadout-slot rounded-xl p-2.5 text-xs" data-category="ability" data-id="boost">
-              <div class="font-bold text-white">🔷 Boost Launch</div><div class="text-slate-400 text-[10px]">Vertical launch, stack 4 for gold</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="text-[10px] text-slate-500 mt-2 text-center">Changes apply on next round</div>
     </div>
     <div id="menuSettingsSlot" class="mb-4"></div>
     <button id="btnStart" class="w-full bg-gradient-to-r from-cyan-300 to-blue-500 text-slate-950 font-black py-4 rounded-xl text-lg shadow-xl shadow-cyan-500/20">Enter Arena</button>
@@ -1329,7 +1322,7 @@ function updateWeaponHud() {
     // Active highlight
     const slotEls=['wpn_primary','wpn_secondary','wpn_melee','wpn_util'];
     const sEl=document.getElementById(slotEls[s-1]);
-    if(sEl) sEl.style.opacity=s===activeSlot?'1':'0.5';
+    if(sEl){ sEl.style.opacity=''; sEl.classList.toggle('hb-active', s===activeSlot); }
   });
   const abilDef=LOADOUT_DEFS.ability[currentLoadout.ability];
   if(abilDef){$('wpnAbilityLabel').textContent=abilDef.icon+' '+abilDef.name+(abilityReady?'':`(${Math.ceil(abilityCooldown)}s)`);}
@@ -1807,19 +1800,52 @@ function setTab(t){
   if(t==='loadout')renderLoadoutUI();
 }
 
-// ===================== LOADOUT UI =====================
+// ===================== LOADOUT UI (Rivals-style) =====================
+const LO_META={primary:{label:'Primary',key:'1'},secondary:{label:'Secondary',key:'2'},melee:{label:'Melee',key:'3'},util:{label:'Utility',key:'4'},ability:{label:'Ability',key:'E'}};
+const LO_RARITY={common:{n:'Common',c:'#9ca3af'},uncommon:{n:'Uncommon',c:'#4ade80'},rare:{n:'Rare',c:'#38bdf8'},epic:{n:'Epic',c:'#a855f7'},legendary:{n:'Legendary',c:'#fbbf24'}};
+const LO_ITEMS={
+  ar:{r:'common',d:'Accurate, rapid-fire'},sniper:{r:'rare',d:'High knockback, scope'},shotgun:{r:'uncommon',d:'Spread, close-range'},rpg:{r:'epic',d:'Rocket splash, self-boost'},
+  smg:{r:'uncommon',d:'Fast, blooms over time'},pistol:{r:'common',d:'Semi-auto, precise'},
+  fists:{r:'common',d:'Double jump + redirect'},scythe:{r:'epic',d:'Right-click: dash strike'},katana:{r:'legendary',d:'Right-click: deflect knockback'},
+  grenade:{r:'common',d:'Throw for area knockback'},grappler:{r:'rare',d:'Hook to any surface'},boostpad:{r:'uncommon',d:'Place a launch pad'},
+  stungun:{r:'rare',d:'Stuns opponent 2.5s'},boost:{r:'epic',d:'Vertical launch, stack 4 for gold'}
+};
+let loCat='primary',loInspect=null;
+function loRar(id){return LO_RARITY[(LO_ITEMS[id]||{}).r||'common'];}
 function renderLoadoutUI(){
-  ['primary','secondary','melee','util','ability'].forEach(cat=>{
-    const slots=document.querySelectorAll(`[data-category="${cat}"]`);
-    slots.forEach(el=>{
-      const id=el.dataset.id;
-      el.classList.toggle('selected', currentLoadout[cat]===id);
-      el.onclick=()=>{
-        currentLoadout[cat]=id;saveLoadout();renderLoadoutUI();updateWeaponHud();
-      };
-    });
+  const root=document.getElementById('loadoutControls');if(!root)return;
+  const cm=document.getElementById('menuCoins');if(cm)document.getElementById('loCoins').textContent=cm.textContent;
+  const cats=Object.keys(LO_META);
+  if(!loInspect||!LOADOUT_DEFS[loCat][loInspect])loInspect=currentLoadout[loCat];
+  // top slot cards
+  document.getElementById('loSlots').innerHTML=cats.map(c=>{
+    const id=currentLoadout[c],d=LOADOUT_DEFS[c][id]||{name:'—',icon:'?'},r=loRar(id);
+    return `<div class="lo-card${c===loCat?' sel':''}" data-slot="${c}" style="--rc:${r.c}"><div class="lo-slotname"><span>${LO_META[c].label}</span><span class="lo-key">${LO_META[c].key}</span></div><div class="lo-ico">${d.icon}</div><div class="lo-name">${d.name}<small>${r.n}</small></div></div>`;
+  }).join('');
+  // item grid
+  const items=Object.entries(LOADOUT_DEFS[loCat]);
+  document.getElementById('loGridTitle').textContent=LO_META[loCat].label;
+  document.getElementById('loGridCount').textContent=items.length+' items';
+  document.getElementById('loGrid').innerHTML=items.map(([id,d])=>{
+    const r=loRar(id);
+    return `<div class="lo-item${id===loInspect?' insp':''}" data-id="${id}" style="--rc:${r.c}">${currentLoadout[loCat]===id?'<div class="tag">EQUIPPED</div>':''}<div class="ico">${d.icon}</div><div class="nm">${d.name}</div></div>`;
+  }).join('');
+  // inspect panel
+  const d=LOADOUT_DEFS[loCat][loInspect],r=loRar(loInspect),eq=currentLoadout[loCat]===loInspect;
+  document.getElementById('loInfo').innerHTML=`<div class="lo-prev" style="--rc:${r.c}"><span>${d.icon}</span></div><div class="lo-rar" style="color:${r.c}">${r.n} &middot; ${LO_META[loCat].label}</div><div class="lo-iname">${d.name}</div><div class="lo-desc">${(LO_ITEMS[loInspect]||{}).d||''}</div><button id="loEquip" type="button" class="lo-eq${eq?' on':''}">${eq?'Equipped':'Equip'}</button>`;
+  // handlers
+  document.querySelectorAll('#loSlots .lo-card').forEach(el=>el.onclick=()=>{loCat=el.dataset.slot;loInspect=null;renderLoadoutUI();});
+  document.querySelectorAll('#loGrid .lo-item').forEach(el=>{
+    el.onclick=()=>{loInspect=el.dataset.id;renderLoadoutUI();};
+    el.ondblclick=()=>{loInspect=el.dataset.id;currentLoadout[loCat]=loInspect;saveLoadout();renderLoadoutUI();updateWeaponHud();};
   });
+  const eqb=document.getElementById('loEquip');
+  if(eqb)eqb.onclick=()=>{if(currentLoadout[loCat]===loInspect)return;currentLoadout[loCat]=loInspect;saveLoadout();renderLoadoutUI();updateWeaponHud();};
 }
+(function(){
+  const c=document.getElementById('loClose');if(c)c.onclick=()=>setTab('solo');
+  document.addEventListener('keydown',e=>{const r=document.getElementById('loadoutControls');if(e.key==='Escape'&&r&&!r.classList.contains('hidden'))setTab('solo');});
+})();
 
 // ===================== ACCOUNTS =====================
 
