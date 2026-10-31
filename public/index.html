@@ -791,36 +791,32 @@ function buildArena(i) {
 }
 
 // ===================== BLOB CHARACTERS =====================
+// smooth capsule-bodied blob with visor and arm (restored from build 11)
+function capsule(r, len, mat) {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 28), mat));
+  [1, -1].forEach(s => { const c = new THREE.Mesh(new THREE.SphereGeometry(r, 28, 18), mat); c.position.y = s * len / 2; g.add(c); });
+  return g;
+}
 function buildCharacter(color) {
-  // Blob player: a squishy round body with two eyes (same ~1.7 height as before so hitboxes still line up)
   const root = new THREE.Group();
-  const col = new THREE.Color(color);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.45, metalness: 0.05 });
-  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25, metalness: 0 });
-  const pupilMat = new THREE.MeshStandardMaterial({ color: 0x0b1020, roughness: 0.2, metalness: 0 });
+  const body = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.1 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x0b1020, roughness: 0.2, metalness: 0.6 });
   const model = new THREE.Group();
-
-  const blob = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 18), bodyMat);
-  blob.scale.set(0.68, 0.85, 0.68);
-  blob.position.y = -0.02;
-  blob.castShadow = true; model.add(blob);
-
-  [-0.23, 0.23].forEach(x => {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 10), eyeMat);
-    eye.position.set(x, 0.3, -0.5); eye.userData.keep = true; model.add(eye);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), pupilMat);
-    pupil.position.set(x, 0.3, -0.63); pupil.userData.keep = true; model.add(pupil);
-  });
-
-  root.add(model);
-  scene.add(root);
+  model.add(capsule(0.42, 0.7, body));
+  const visor = new THREE.Mesh(new THREE.SphereGeometry(0.3, 24, 16), dark);
+  visor.scale.set(1.1, 0.55, 0.7); visor.position.set(0, 0.5, -0.28); visor.userData.keep = true; model.add(visor);
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.7, 12), dark);
+  arm.rotation.x = Math.PI / 2; arm.position.set(0.42, 0.05, -0.4); arm.userData.keep = true; model.add(arm);
+  model.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  root.add(model); scene.add(root);
   return root;
 }
 
 function rebuildCharacterColor(root, color) {
   if (!root) return;
   const model = root.children[0]; if (!model) return;
-  const body = new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.05 });
+  const body = new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.1 });
   model.traverse(o => { if (o.isMesh && !o.userData.keep) o.material = body; });
 }
 
@@ -1812,7 +1808,7 @@ const CHANGELOG={version:'2.0',sections:[
     '+ Ability (E key): Stun Gun or Boost Launch',
     '+ Coins: earn 15 ⬡ per KO',
     '+ Shop: buy Avatars and open Weapon Crates (RNG skins)',
-    '+ Players are blobs again',
+    '+ Players are the smooth capsule blobs again',
     '+ Better weapon viewmodels for every weapon type',
     '+ Right-side HUD showing your loadout at a glance',
     '+ Proximity Voice Chat (toggle in Settings, Open Mic / Muted / Hold to Talk)',
