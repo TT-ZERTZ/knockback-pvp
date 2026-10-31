@@ -790,68 +790,28 @@ function buildArena(i) {
   }
 }
 
-// ===================== IMPROVED CHARACTERS =====================
+// ===================== BLOB CHARACTERS =====================
 function buildCharacter(color) {
+  // Blob player: a squishy round body with two eyes (same ~1.7 height as before so hitboxes still line up)
   const root = new THREE.Group();
   const col = new THREE.Color(color);
-  const body = new THREE.MeshStandardMaterial({ color: col, roughness: 0.3, metalness: 0.2 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x0b1020, roughness: 0.15, metalness: 0.75 });
-  const visorMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.05, metalness: 0.95, emissive: 0x38bdf8, emissiveIntensity: 0.5, transparent: true, opacity: 0.85 });
-  const trim = new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(1.4), roughness: 0.2, metalness: 0.8, emissive: col, emissiveIntensity: 0.3 });
-
+  const bodyMat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.45, metalness: 0.05 });
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25, metalness: 0 });
+  const pupilMat = new THREE.MeshStandardMaterial({ color: 0x0b1020, roughness: 0.2, metalness: 0 });
   const model = new THREE.Group();
 
-  // Torso — proper armored chest
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.72, 0.44), body);
-  torso.position.y = 0.15; torso.castShadow = true; model.add(torso);
+  const blob = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 18), bodyMat);
+  blob.scale.set(0.68, 0.85, 0.68);
+  blob.position.y = -0.02;
+  blob.castShadow = true; model.add(blob);
 
-  // Chest plate detail
-  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.5, 0.08), trim);
-  plate.position.set(0, 0.16, -0.24); model.add(plate);
-
-  // Head
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.5, 0.52), body);
-  head.position.y = 0.69; head.castShadow = true; model.add(head);
-
-  // Helmet brow
-  const brow = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.1, 0.15), dark);
-  brow.position.set(0, 0.88, -0.2); model.add(brow);
-
-  // Visor (glowing)
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.2, 0.07), visorMat);
-  visor.position.set(0, 0.72, -0.28); model.add(visor);
-
-  // Visor divider
-  const div = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.08), dark);
-  div.position.set(0, 0.72, -0.26); model.add(div);
-
-  // Legs
-  [[-0.18, 1], [0.18, -1]].forEach(([xOff, _]) => {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.56, 0.3), body);
-    leg.position.set(xOff, -0.38, 0); leg.castShadow = true; model.add(leg);
-    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.18, 0.36), dark);
-    boot.position.set(xOff, -0.65, -0.03); boot.castShadow = true; model.add(boot);
-    const kneePad = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.1), trim);
-    kneePad.position.set(xOff, -0.22, -0.16); model.add(kneePad);
+  [-0.23, 0.23].forEach(x => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 10), eyeMat);
+    eye.position.set(x, 0.3, -0.5); eye.userData.keep = true; model.add(eye);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), pupilMat);
+    pupil.position.set(x, 0.3, -0.63); pupil.userData.keep = true; model.add(pupil);
   });
 
-  // Arms
-  [[-0.48, 1], [0.48, -1]].forEach(([xOff, side]) => {
-    const upper = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.4, 0.26), body);
-    upper.position.set(xOff, 0.08, 0); upper.castShadow = true; model.add(upper);
-    const lower = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.36, 0.22), dark);
-    lower.position.set(xOff, -0.28, 0); lower.castShadow = true; model.add(lower);
-    const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8), trim);
-    shoulder.position.set(xOff, 0.28, 0); model.add(shoulder);
-  });
-
-  // Back pack
-  const pack = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.2), dark);
-  pack.position.set(0, 0.1, 0.28); model.add(pack);
-  const packTrim = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 0.04), trim);
-  packTrim.position.set(0, 0.28, 0.39); model.add(packTrim);
-
-  model.traverse(o => { if(o.isMesh) o.castShadow = true; });
   root.add(model);
   scene.add(root);
   return root;
@@ -860,16 +820,8 @@ function buildCharacter(color) {
 function rebuildCharacterColor(root, color) {
   if (!root) return;
   const model = root.children[0]; if (!model) return;
-  const body = new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.2 });
-  const trim = new THREE.MeshStandardMaterial({ color: color.clone().multiplyScalar(1.4), roughness: 0.2, metalness: 0.8, emissive: color, emissiveIntensity: 0.3 });
-  model.traverse(o => {
-    if (!o.isMesh) return;
-    const c = o.material.color;
-    if (c && c.r < 0.1 && c.g < 0.15 && c.b < 0.15) return; // dark parts stay
-    if (o.material.emissiveIntensity > 0.4 && o.material.emissiveIntensity < 0.6) return; // visor stays
-    if (o.material.emissiveIntensity === 0.3) { o.material = trim; return; }
-    o.material = body;
-  });
+  const body = new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.05 });
+  model.traverse(o => { if (o.isMesh && !o.userData.keep) o.material = body; });
 }
 
 // ===================== IMPROVED GUN MODELS =====================
@@ -1860,7 +1812,7 @@ const CHANGELOG={version:'2.0',sections:[
     '+ Ability (E key): Stun Gun or Boost Launch',
     '+ Coins: earn 15 ⬡ per KO',
     '+ Shop: buy Avatars and open Weapon Crates (RNG skins)',
-    '+ Improved 3D character models with armor, visor, and detail',
+    '+ Players are blobs again',
     '+ Better weapon viewmodels for every weapon type',
     '+ Right-side HUD showing your loadout at a glance',
     '+ Proximity Voice Chat (toggle in Settings, Open Mic / Muted / Hold to Talk)',
