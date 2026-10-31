@@ -43,11 +43,6 @@ input[type=range]{accent-color:#22d3ee}
 </div>
 <button id="clOpen" type="button" class="glass text-[11px] font-bold text-cyan-300 hover:text-white rounded-lg px-3 py-1.5" style="position:fixed;left:12px;bottom:12px;z-index:60">Change Log</button>
 
-<!-- ACCOUNT MODAL -->
-<div id="acctModal" style="display:none;position:fixed;inset:0;z-index:110;background:rgba(2,6,23,.72);align-items:center;justify-content:center;padding:16px">
-  <div class="glass rounded-3xl text-slate-100 shadow-2xl relative w-full max-w-sm p-7">
-    <button id="acClose" type="button" class="absolute top-3 right-4 text-slate-400 hover:text-white text-2xl font-bold leading-none">&times;</button>
-    <div id="acTitle" class="text-xl font-black text-cyan-300">Log in</div>
     <div id="acSub" class="text-xs text-slate-400 mb-4 mt-0.5"></div>
     <div class="flex flex-col gap-2.5">
       <input id="acEmail" maxlength="254" autocomplete="username" placeholder="Email or username" class="bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-100 focus:outline-none focus:border-cyan-400">
@@ -255,12 +250,8 @@ input[type=range]{accent-color:#22d3ee}
     </div>
     <!-- Coin display -->
     <div class="flex items-center justify-between text-xs mb-3 -mt-1">
-      <span id="acctText" class="text-slate-400">Playing as guest.</span>
-      <div class="flex items-center gap-3">
-        <div class="coin-badge rounded-lg px-2 py-1 text-slate-950 font-black text-xs flex items-center gap-1">⬡ <span id="menuCoins">0</span></div>
-        <button id="acctBtn" type="button" class="font-bold text-cyan-300 hover:text-white">Log in / Sign up</button>
-        <button id="shopBtn" type="button" class="font-bold text-amber-300 hover:text-white">🛒 Shop</button>
-      </div>
+      <div class="coin-badge rounded-lg px-2 py-1 text-slate-950 font-black text-xs flex items-center gap-1">⬡ <span id="menuCoins">0</span></div>
+      <button id="shopBtn" type="button" class="font-bold text-amber-300 hover:text-white">🛒 Shop</button>
     </div>
     <!-- Tabs -->
     <div class="flex bg-slate-900/70 p-1 rounded-xl mb-4" style="flex-wrap:wrap;gap:2px">
@@ -1611,7 +1602,7 @@ function connectWS(){
   if(banned||(ws&&ws.readyState<=1))return;
   setStatus('Connecting...');
   try{ws=new WebSocket(WS_URL);}catch(e){return setStatus('Could not reach the server.',true);}
-  ws.onopen=()=>send({t:'hello',name:myName,device:deviceId,key:store.get('kb_key'),token:store.get('kb_token')});
+  ws.onopen=()=>send({t:'hello',name:myName,device:deviceId,key:store.get('kb_key')});
   ws.onmessage=e=>{try{onServer(JSON.parse(e.data));}catch(err){}};
   ws.onclose=()=>{wsReady=false;ws=null;if(conn)endOnline('Lost connection to the server.');};
   ws.onerror=()=>setStatus('Could not reach the server.',true);
@@ -1620,7 +1611,7 @@ function setAdmin(a){myAdmin=a;if(!a)toggleAdmin(false);refreshNames();}
 function onServer(m){
   switch(m.t){
     case 'ready':wsReady=true;setAdmin(m.admin);if(store.get('kb_key')&&!m.admin){store.set('kb_key','');setStatus('Admin key was wrong.',true);}else setStatus('Connected.');pending.splice(0).forEach(f=>f());break;
-    case 'auth_required':pending=[];if(store.get('kb_token')){store.set('kb_token','');store.set('kb_user','');applyAccount();}setStatus('Log in to play online.',true);openAccount('login');break;
+
     case 'authed':setAdmin(m.admin);if(!m.admin){store.set('kb_key','');console.warn('Wrong admin key.');}break;
     case 'banned':banned=true;pending=[];setStatus('You are banned '+(m.until?'until '+new Date(m.until).toLocaleString():'permanently')+(m.reason?': '+m.reason:'')+'.', true);break;
     case 'hosted':$('hudRoomCode').textContent=m.code;setStatus('Room code: '+m.code+' (waiting...)');break;
@@ -1831,53 +1822,6 @@ function renderLoadoutUI(){
 }
 
 // ===================== ACCOUNTS =====================
-let acMode='login',acEmail='',openAccount=()=>{};
-function applyAccount(){
-  const u=store.get('kb_user'),t=store.get('kb_token'),ni=$('nameInput');
-  if(u&&t){myName=u;ni.value=u;ni.disabled=true;$('acctText').textContent='Signed in as '+u;$('acctBtn').textContent='Log out';}
-  else{myName=cleanName(store.get('kb_name'))||'Player'+(100+Math.floor(Math.random()*900));ni.disabled=false;ni.value=myName;$('acctText').textContent='Playing as guest.';$('acctBtn').textContent='Log in / Sign up';}
-  refreshNames();
-}
-function resetSocket(reconnect){const o=ws;ws=null;wsReady=false;pending=[];if(o){o.onclose=null;o.onmessage=null;try{o.close();}catch(e){}}if(reconnect)connectWS();}
-function setupAccount(){
-  const API_URL=WS_URL.replace(/^wss:/,'https:').replace(/^ws:/,'http:').replace(/\/ws$/,'/api/');
-  const modal=$('acctModal'),msg=$('acMsg'),go=$('acGo');
-  const say=(t,bad)=>{msg.textContent=t;msg.style.color=bad?'#fb7185':'#6ee7b7';};
-  const api=async(path,body)=>{try{const r=await fetch(API_URL+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));return Object.assign({status:r.status},j);}catch(e){return{error:'Could not reach the server.'};} };
-  const mode=m=>{
-    acMode=m;say('');
-    $('acUser').classList.toggle('hidden',m!=='signup');
-    $('acEmail').classList.toggle('hidden',m==='verify');$('acPass').classList.toggle('hidden',m==='verify');
-    $('acCode').classList.toggle('hidden',m!=='verify');$('acResend').classList.toggle('hidden',m!=='verify');
-    $('acSwitch').classList.toggle('hidden',m==='verify');
-    $('acEmail').placeholder=m==='signup'?'Email':'Email or username';
-    $('acPass').autocomplete=m==='signup'?'new-password':'current-password';
-    $('acTitle').textContent=m==='login'?'Log in':m==='signup'?'Create account':'Check your email';
-    $('acSub').textContent=m==='verify'?'We sent a 6-digit code to '+acEmail+'. Expires in 10 minutes.':'An account is needed to play online.';
-    go.textContent=m==='login'?'Log in':m==='signup'?'Sign up':'Verify';
-    $('acSwitch').textContent=m==='login'?'Create an account':'I already have an account';
-  };
-  openAccount=m=>{modal.style.display='flex';mode(m||'login');setTimeout(()=>{const f=m==='verify'?$('acCode'):$('acEmail');f.focus();},0);};
-  const closeAcc=()=>{modal.style.display='none';};
-  const done=r=>{store.set('kb_token',r.token);store.set('kb_user',r.username);$('acPass').value='';$('acCode').value='';closeAcc();applyAccount();resetSocket(true);};
-  const submit=async()=>{
-    if(go.disabled)return; go.disabled=true;say('Working...');
-    const email=$('acEmail').value.trim(),pw=$('acPass').value; let r;
-    if(acMode==='login'){r=await api('login',{login:email,password:pw});if(r.token)return done(r);if(r.needCode){acEmail=r.email;api('resend',{email:acEmail});mode('verify');say('Enter code from email.');}else say(r.error||'Login failed.',true);}
-    else if(acMode==='signup'){r=await api('signup',{email,username:$('acUser').value.trim(),password:pw});if(r.needCode){acEmail=email.toLowerCase();mode('verify');say('Code sent. Check inbox.');$('acCode').focus();}else say(r.error||'Signup failed.',true);}
-    else{r=await api('verify',{email:acEmail,code:$('acCode').value.trim()});if(r.token)return done(r);say(r.error||'Verification failed.',true);}
-    go.disabled=false;
-  };
-  go.onclick=submit;
-  ['acEmail','acUser','acPass','acCode'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.code==='Enter')submit();}));
-  $('acSwitch').onclick=()=>mode(acMode==='login'?'signup':'login');
-  $('acResend').onclick=async()=>{say('Sending...');const r=await api('resend',{email:acEmail});r.ok?say('New code sent.'):say(r.error||'Could not resend.',true);};
-  $('acClose').onclick=closeAcc;
-  modal.addEventListener('mousedown',e=>{if(e.target===modal)closeAcc();});
-  addEventListener('keydown',e=>{if(e.code==='Escape'&&modal.style.display==='flex'){e.stopImmediatePropagation();closeAcc();}},true);
-  $('acctBtn').onclick=()=>{if(store.get('kb_token')){api('logout',{token:store.get('kb_token')});store.set('kb_token','');store.set('kb_user','');applyAccount();resetSocket(false);setStatus('');}else openAccount('login');};
-  applyAccount();
-}
 
 // ===================== CHANGELOG =====================
 const CHANGELOG={version:'2.0',sections:[
@@ -2038,7 +1982,7 @@ function boot(){
     'https://unpkg.com/three@0.136.0/build/three.min.js'
   ],()=>{
     initThree();
-    setupInput();setupSettings();setupChangelog();setupConsole();setupAccount();setupTabs();
+    setupInput();setupSettings();setupChangelog();setupConsole();setupTabs();
     refreshNames();updateBoostHud();updateCoinHud();updateWeaponHud();
     renderLoadoutUI();
     startTick();animate();
